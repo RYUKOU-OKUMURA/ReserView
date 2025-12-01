@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ReserView - 予約集計ビューア</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #2D8B6F;
+      --primary-light: #E8F5F0;
+      --primary-dark: #1F6B54;
+      --bg: #F5F7F9;
+      --card-bg: #FFFFFF;
+      --text: #2C3E50;
+      --text-light: #6B7C8F;
+      --border: #E1E8ED;
+      --shadow: 0 2px 8px rgba(0,0,0,0.08);
+      --shadow-lg: 0 4px 16px rgba(0,0,0,0.12);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ===== 初期画面 ===== */
+    .init-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .init-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      padding: 48px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    .init-logo {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+
+    .init-subtitle {
+      color: var(--text-light);
+      margin-bottom: 32px;
+    }
+
+    .init-select {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      background: white;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+
+    .init-btn {
+      width: 100%;
+      padding: 16px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .init-btn:hover { background: var(--primary-dark); }
+    .init-btn:disabled { background: #AAB8C2; cursor: not-allowed; }
+
+    /* ===== メイン画面 ===== */
+    .main-screen { display: none; }
+    .main-screen.active { display: block; }
+
+    /* ヘッダー */
+    .header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo { font-size: 20px; font-weight: 700; color: var(--primary); }
+
+    .header-summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+    }
+
+    .header-amount {
+      font-weight: 700;
+      color: var(--primary-dark);
+      font-size: 18px;
+    }
+
+    /* フィルタエリア */
+    .filter-area {
+      background: var(--card-bg);
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-row:last-child { margin-bottom: 0; }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filter-label {
+      font-size: 13px;
+      color: var(--text-light);
+      white-space: nowrap;
+    }
+
+    .filter-select {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+    }
+
+    .filter-select:focus { outline: none; border-color: var(--primary); }
+
+    .filter-select-sm {
+      padding: 8px 6px;
+      min-width: 70px;
+    }
+
+    .date-range {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .date-separator {
+      color: var(--text-light);
+      font-size: 13px;
+    }
+
+    .btn-reset {
+      padding: 8px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--text-light);
+    }
+
+    .btn-reset:hover { background: var(--border); }
+
+    .search-input {
+      flex: 1;
+      min-width: 180px;
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+    }
+
+    .search-input:focus { outline: none; border-color: var(--primary); }
+
+    .quick-filters {
+      display: flex;
+      gap: 8px;
+    }
+
+    .quick-btn {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: white;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .quick-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .quick-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+    /* 集計バー */
+    .summary-bar {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      padding: 12px 24px;
+      font-size: 13px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .summary-item { opacity: 0.95; }
+
+    /* メインレイアウト */
+    .main-container {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      height: calc(100vh - 180px);
+    }
+
+    /* 左カラム */
+    .left-column {
+      overflow-y: auto;
+      padding: 16px 24px;
+    }
+
+    /* 予約カード */
+    .reservation-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      border: 2px solid transparent;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .reservation-card:hover { box-shadow: var(--shadow-lg); }
+    .reservation-card.selected { border-color: var(--primary); background: var(--primary-light); }
+
+    .card-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-row + .card-row { margin-top: 6px; }
+
+    .card-main {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-date { font-size: 13px; color: var(--text-light); min-width: 80px; }
+    .card-time { font-size: 14px; font-weight: 600; }
+    .card-patient { font-size: 14px; font-weight: 500; }
+
+    .status-badge {
+      padding: 3px 10px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .status-badge.confirmed { background: #E3F2FD; color: #1976D2; }
+    .status-badge.completed { background: #E8F5E9; color: #388E3C; }
+
+    .card-menu { font-size: 13px; color: var(--text-light); }
+
+    .card-amount { font-size: 16px; font-weight: 700; color: var(--primary-dark); }
+
+    .card-payment {
+      font-size: 12px;
+      color: var(--text-light);
+      background: var(--bg);
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    /* 右カラム */
+    .right-column {
+      background: var(--card-bg);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-light);
+    }
+
+    .panel-empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+
+    .panel-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-title { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+    .panel-subtitle { font-size: 13px; color: var(--text-light); }
+
+    .panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .detail-section { margin-bottom: 20px; }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-light);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .detail-item { display: flex; flex-direction: column; gap: 2px; }
+    .detail-label { font-size: 11px; color: var(--text-light); }
+    .detail-value { font-size: 14px; font-weight: 500; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+
+    .form-input, .form-select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+    }
+
+    .form-input:focus, .form-select:focus { outline: none; border-color: var(--primary); }
+
+    .form-textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      min-height: 100px;
+      resize: vertical;
+      font-family: inherit;
+    }
+
+    .form-textarea:focus { outline: none; border-color: var(--primary); }
+
+    .panel-footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-primary:disabled { background: #AAB8C2; cursor: not-allowed; }
+
+    .btn-secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--border); }
+
+    /* ローディング・空状態 */
+    .loading { display: flex; align-items: center; justify-content: center; padding: 40px; }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty-state { text-align: center; padding: 60px 24px; color: var(--text-light); }
+    .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+
+    /* トースト */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: #333;
+      color: white;
+      padding: 12px 24px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 1000;
+    }
+
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .toast.success { background: var(--primary); }
+    .toast.error { background: #D32F2F; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- 初期画面 -->
+  <div class="init-screen" id="initScreen">
+    <div class="init-card">
+      <div class="init-logo">📊 ReserView</div>
+      <p class="init-subtitle">表示する月を選んでください</p>
+      <select class="init-select" id="initYearMonth">
+        <option value="">読み込み中...</option>
+      </select>
+      <button class="init-btn" id="initBtn" disabled>開く</button>
+    </div>
+  </div>
+
+  <!-- メイン画面 -->
+  <div class="main-screen" id="mainScreen">
+    
+    <header class="header">
+      <span class="logo">📊 ReserView</span>
+      <div class="header-summary">
+        <span>合計:</span>
+        <span class="header-amount" id="headerAmount">¥0</span>
+        <span id="headerCount">(0件)</span>
+      </div>
+    </header>
+
+    <div class="filter-area">
+      <div class="filter-row">
+        <div class="filter-group">
+          <span class="filter-label">📅</span>
+          <select class="filter-select" id="filterYearMonth"></select>
+        </div>
+        <div class="filter-group date-range">
+          <select class="filter-select filter-select-sm" id="filterStartDay">
+            <option value="0">1日</option>
+          </select>
+          <span class="date-separator">〜</span>
+          <select class="filter-select filter-select-sm" id="filterEndDay">
+            <option value="0">末日</option>
+          </select>
+        </div>
+        <button class="btn-reset" id="btnResetDate">日付リセット</button>
+        <div class="filter-group">
+          <span class="filter-label">💳</span>
+          <select class="filter-select" id="filterPayment">
+            <option value="all">すべて</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">🏷️</span>
+          <select class="filter-select" id="filterMenu">
+            <option value="all">すべて</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">👨‍⚕️</span>
+          <select class="filter-select" id="filterStaff">
+            <option value="all">すべて</option>
+          </select>
+        </div>
+      </div>
+      <div class="filter-row">
+        <input type="text" class="search-input" id="searchInput" placeholder="🔍 患者名で検索...">
+        <div class="filter-group">
+          <span class="filter-label">並び順</span>
+          <select class="filter-select" id="filterSort">
+            <option value="date-desc">日付 新→古</option>
+            <option value="date-asc">日付 古→新</option>
+            <option value="amount-desc">金額 高→低</option>
+            <option value="amount-asc">金額 低→高</option>
+            <option value="patient-asc">患者名 A→Z</option>
+          </select>
+        </div>
+        <div class="quick-filters">
+          <button class="quick-btn active" data-status="all">すべて</button>
+          <button class="quick-btn" data-status="予約確定">予約確定</button>
+          <button class="quick-btn" data-status="来院済み">来院済み</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-bar" id="summaryBar">
+      <span class="summary-item">現金: <strong id="sumCash">¥0</strong></span>
+      <span class="summary-item">クレジット: <strong id="sumCredit">¥0</strong></span>
+      <span class="summary-item">回数券: <strong id="sumTicket">¥0</strong></span>
+      <span class="summary-item">PayPay: <strong id="sumPaypay">¥0</strong></span>
+    </div>
+
+    <div class="main-container">
+      <div class="left-column" id="reservationList">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+
+      <div class="right-column">
+        <div class="panel-empty" id="panelEmpty">
+          <div class="panel-empty-icon">📋</div>
+          <p>予約を選択</p>
+        </div>
+        
+        <div id="detailPanel" class="hidden" style="height:100%;display:flex;flex-direction:column;">
+          <div class="panel-header">
+            <div class="panel-title" id="panelTitle">-</div>
+            <div class="panel-subtitle" id="panelSubtitle">-</div>
+          </div>
+          
+          <div class="panel-content">
+            <div class="detail-section">
+              <div class="section-title">予約情報</div>
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <span class="detail-label">日付</span>
+                  <span class="detail-value" id="detailDate">-</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">時間</span>
+                  <span class="detail-value" id="detailTime">-</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">メニュー</span>
+                  <span class="detail-value" id="detailMenu">-</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">担当</span>
+                  <span class="detail-value" id="detailStaff">-</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="detail-section">
+              <div class="section-title">編集</div>
+              
+              <div class="form-group">
+                <label class="form-label">ステータス</label>
+                <select class="form-select" id="editStatus">
+                  <option value="予約確定">予約確定</option>
+                  <option value="来院済み">来院済み</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">金額</label>
+                <input type="number" class="form-input" id="editAmount" placeholder="0">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">決済方法</label>
+                <select class="form-select" id="editPayment">
+                  <option value="">未選択</option>
+                  <option value="現金">現金</option>
+                  <option value="クレジット">クレジット</option>
+                  <option value="回数券">回数券</option>
+                  <option value="PayPay">PayPay</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">メモ</label>
+                <textarea class="form-textarea" id="editMemo" placeholder="メモを入力..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-footer">
+            <button class="btn btn-primary" id="btnSave">保存する</button>
+            <button class="btn btn-secondary" id="btnClose">閉じる</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    var state = {
+      reservations: [],
+      summary: {},
+      filterOptions: {},
+      selectedRowIndex: null,
+      filters: {
+        yearMonth: '',
+        startDay: 0,
+        endDay: 0,
+        payment: 'all',
+        menu: 'all',
+        staff: 'all',
+        status: 'all',
+        search: '',
+        sortKey: 'date',
+        sortOrder: 'desc'
+      }
+    };
+
+    document.addEventListener('DOMContentLoaded', init);
+
+    function init() {
+      loadFilterOptions();
+      setupEventListeners();
+    }
+
+    function callServer(functionName) {
+      var args = Array.prototype.slice.call(arguments, 1);
+      return new Promise(function(resolve, reject) {
+        var runner = google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject);
+        runner[functionName].apply(runner, args);
+      });
+    }
+
+    function loadFilterOptions() {
+      callServer('getFilterOptions')
+        .then(function(options) {
+          state.filterOptions = options;
+          populateInitSelect(options.yearMonths);
+          document.getElementById('initBtn').disabled = false;
+        })
+        .catch(function(error) {
+          showToast('読み込みエラー: ' + error.message, 'error');
+        });
+    }
+
+    function populateInitSelect(yearMonths) {
+      var sel = document.getElementById('initYearMonth');
+      sel.innerHTML = '';
+      yearMonths.forEach(function(ym) {
+        var opt = document.createElement('option');
+        opt.value = ym;
+        opt.textContent = ym.replace('-', '年') + '月';
+        sel.appendChild(opt);
+      });
+    }
+
+    function populateMainFilters() {
+      var opts = state.filterOptions;
+      
+      // 年月
+      var ymSel = document.getElementById('filterYearMonth');
+      ymSel.innerHTML = '';
+      opts.yearMonths.forEach(function(ym) {
+        var opt = document.createElement('option');
+        opt.value = ym;
+        opt.textContent = ym.replace('-', '年') + '月';
+        if (ym === state.filters.yearMonth) opt.selected = true;
+        ymSel.appendChild(opt);
+      });
+      
+      // 日付範囲
+      var startSel = document.getElementById('filterStartDay');
+      var endSel = document.getElementById('filterEndDay');
+      startSel.innerHTML = '<option value="0">1日〜</option>';
+      endSel.innerHTML = '<option value="0">〜末日</option>';
+      for (var d = 1; d <= 31; d++) {
+        var opt1 = document.createElement('option');
+        opt1.value = d;
+        opt1.textContent = d + '日〜';
+        startSel.appendChild(opt1);
+        
+        var opt2 = document.createElement('option');
+        opt2.value = d;
+        opt2.textContent = '〜' + d + '日';
+        endSel.appendChild(opt2);
+      }
+      
+      // 決済
+      var paySel = document.getElementById('filterPayment');
+      paySel.innerHTML = '<option value="all">すべて</option>';
+      opts.payment.forEach(function(p) {
+        var opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        paySel.appendChild(opt);
+      });
+      
+      // メニュー
+      var menuSel = document.getElementById('filterMenu');
+      menuSel.innerHTML = '<option value="all">すべて</option>';
+      opts.menu.forEach(function(m) {
+        var opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        menuSel.appendChild(opt);
+      });
+      
+      // 担当
+      var staffSel = document.getElementById('filterStaff');
+      staffSel.innerHTML = '<option value="all">すべて</option>';
+      opts.staff.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s;
+        staffSel.appendChild(opt);
+      });
+    }
+
+    function setupEventListeners() {
+      // 初期画面
+      document.getElementById('initBtn').addEventListener('click', onOpenMain);
+      
+      // フィルタ変更
+      document.getElementById('filterYearMonth').addEventListener('change', onFilterChange);
+      document.getElementById('filterStartDay').addEventListener('change', onFilterChange);
+      document.getElementById('filterEndDay').addEventListener('change', onFilterChange);
+      document.getElementById('filterPayment').addEventListener('change', onFilterChange);
+      document.getElementById('filterMenu').addEventListener('change', onFilterChange);
+      document.getElementById('filterStaff').addEventListener('change', onFilterChange);
+      document.getElementById('filterSort').addEventListener('change', onFilterChange);
+      
+      // 日付リセット
+      document.getElementById('btnResetDate').addEventListener('click', function() {
+        document.getElementById('filterStartDay').value = '0';
+        document.getElementById('filterEndDay').value = '0';
+        state.filters.startDay = 0;
+        state.filters.endDay = 0;
+        loadReservations();
+      });
+      
+      // 検索
+      var searchTimeout;
+      document.getElementById('searchInput').addEventListener('input', function(e) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+          state.filters.search = e.target.value;
+          loadReservations();
+        }, 300);
+      });
+      
+      // クイックフィルタ
+      document.querySelectorAll('.quick-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.quick-btn').forEach(function(b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          state.filters.status = btn.dataset.status;
+          loadReservations();
+        });
+      });
+      
+      // 保存・閉じる
+      document.getElementById('btnSave').addEventListener('click', saveReservation);
+      document.getElementById('btnClose').addEventListener('click', closePanel);
+    }
+
+    function onOpenMain() {
+      var ym = document.getElementById('initYearMonth').value;
+      if (!ym) {
+        showToast('月を選択してください', 'error');
+        return;
+      }
+      
+      state.filters.yearMonth = ym;
+      
+      document.getElementById('initScreen').style.display = 'none';
+      document.getElementById('mainScreen').classList.add('active');
+      
+      populateMainFilters();
+      loadReservations();
+    }
+
+    function onFilterChange() {
+      state.filters.yearMonth = document.getElementById('filterYearMonth').value;
+      state.filters.startDay = parseInt(document.getElementById('filterStartDay').value) || 0;
+      state.filters.endDay = parseInt(document.getElementById('filterEndDay').value) || 0;
+      state.filters.payment = document.getElementById('filterPayment').value;
+      state.filters.menu = document.getElementById('filterMenu').value;
+      state.filters.staff = document.getElementById('filterStaff').value;
+      
+      var sortVal = document.getElementById('filterSort').value.split('-');
+      state.filters.sortKey = sortVal[0];
+      state.filters.sortOrder = sortVal[1];
+      
+      loadReservations();
+    }
+
+    function loadReservations() {
+      var listEl = document.getElementById('reservationList');
+      listEl.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+      
+      callServer('getReservations', state.filters)
+        .then(function(result) {
+          state.reservations = result.reservations;
+          state.summary = result.summary;
+          renderList();
+          updateSummary();
+        })
+        .catch(function(error) {
+          listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>' + error.message + '</p></div>';
+        });
+    }
+
+    function renderList() {
+      var listEl = document.getElementById('reservationList');
+      
+      if (state.reservations.length === 0) {
+        listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>該当なし</p></div>';
+        return;
+      }
+      
+      var html = '';
+      state.reservations.forEach(function(r) {
+        var statusClass = r.status === '予約確定' ? 'confirmed' : 'completed';
+        var selected = r.rowIndex === state.selectedRowIndex ? 'selected' : '';
+        
+        html += '<div class="reservation-card ' + selected + '" data-row="' + r.rowIndex + '">' +
+          '<div class="card-row">' +
+            '<div class="card-main">' +
+              '<span class="card-date">' + r.date + '</span>' +
+              '<span class="card-time">' + r.start + '</span>' +
+              '<span class="card-patient">' + r.patient + '</span>' +
+            '</div>' +
+            '<span class="status-badge ' + statusClass + '">' + r.status + '</span>' +
+          '</div>' +
+          '<div class="card-row">' +
+            '<span class="card-menu">' + r.menu + '</span>' +
+            '<div class="card-main">' +
+              '<span class="card-payment">' + (r.payment || '-') + '</span>' +
+              '<span class="card-amount">¥' + r.amount.toLocaleString() + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+      
+      listEl.innerHTML = html;
+      
+      listEl.querySelectorAll('.reservation-card').forEach(function(card) {
+        card.addEventListener('click', function() {
+          selectReservation(parseInt(card.dataset.row));
+        });
+      });
+    }
+
+    function updateSummary() {
+      var s = state.summary;
+      document.getElementById('headerAmount').textContent = '¥' + s.totalAmount.toLocaleString();
+      document.getElementById('headerCount').textContent = '(' + s.totalCount + '件)';
+      
+      var bp = s.byPayment;
+      document.getElementById('sumCash').textContent = '¥' + (bp['現金'] || 0).toLocaleString();
+      document.getElementById('sumCredit').textContent = '¥' + (bp['クレジット'] || 0).toLocaleString();
+      document.getElementById('sumTicket').textContent = '¥' + (bp['回数券'] || 0).toLocaleString();
+      document.getElementById('sumPaypay').textContent = '¥' + (bp['PayPay'] || 0).toLocaleString();
+    }
+
+    function selectReservation(rowIndex) {
+      var r = null;
+      for (var i = 0; i < state.reservations.length; i++) {
+        if (state.reservations[i].rowIndex === rowIndex) { r = state.reservations[i]; break; }
+      }
+      if (!r) return;
+      
+      state.selectedRowIndex = rowIndex;
+      
+      document.querySelectorAll('.reservation-card').forEach(function(c) {
+        c.classList.toggle('selected', parseInt(c.dataset.row) === rowIndex);
+      });
+      
+      document.getElementById('panelEmpty').style.display = 'none';
+      var panel = document.getElementById('detailPanel');
+      panel.classList.remove('hidden');
+      panel.style.display = 'flex';
+      
+      document.getElementById('panelTitle').textContent = r.patient + ' 様';
+      document.getElementById('panelSubtitle').textContent = r.date + ' ' + r.start;
+      document.getElementById('detailDate').textContent = r.date;
+      document.getElementById('detailTime').textContent = r.start + ' - ' + r.end;
+      document.getElementById('detailMenu').textContent = r.menu;
+      document.getElementById('detailStaff').textContent = r.staff;
+      
+      document.getElementById('editStatus').value = r.status;
+      document.getElementById('editAmount').value = r.amount;
+      document.getElementById('editPayment').value = r.payment || '';
+      document.getElementById('editMemo').value = r.memo || '';
+    }
+
+    function closePanel() {
+      state.selectedRowIndex = null;
+      document.getElementById('panelEmpty').style.display = 'flex';
+      document.getElementById('detailPanel').classList.add('hidden');
+      document.querySelectorAll('.reservation-card').forEach(function(c) { c.classList.remove('selected'); });
+    }
+
+    function saveReservation() {
+      if (!state.selectedRowIndex) return;
+      
+      var btn = document.getElementById('btnSave');
+      btn.disabled = true;
+      btn.textContent = '保存中...';
+      
+      var updates = {
+        status: document.getElementById('editStatus').value,
+        amount: parseInt(document.getElementById('editAmount').value) || 0,
+        payment: document.getElementById('editPayment').value,
+        memo: document.getElementById('editMemo').value
+      };
+      
+      var savedRow = state.selectedRowIndex;
+      
+      callServer('updateReservation', savedRow, updates)
+        .then(function() {
+          showToast('保存しました！', 'success');
+          return loadReservations();
+        })
+        .then(function() {
+          selectReservation(savedRow);
+        })
+        .catch(function(error) {
+          showToast('エラー: ' + error.message, 'error');
+        })
+        .finally(function() {
+          btn.disabled = false;
+          btn.textContent = '保存する';
+        });
+    }
+
+    function showToast(message, type) {
+      var toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast ' + (type || '');
+      toast.classList.add('show');
+      setTimeout(function() { toast.classList.remove('show'); }, 3000);
+    }
+  </script>
+
+</body>
+</html>
