@@ -1704,6 +1704,10 @@
       document.getElementById('loadingOverlay').classList.remove('active');
     }
 
+    function showUserError(message) {
+      alert(message);
+    }
+
     // ========================================
     // フィルタ初期化
     // ========================================
@@ -1975,21 +1979,19 @@
     // 経理モード：データ取得・表示
     // ========================================
     async function loadReservations() {
+      showLoading();
       try {
-        showLoading();
-        
         const result = await runGAS('getReservations', currentFilters);
         reservations = result.reservations;
         
         renderReservations();
         updateSummary(result.summary);
         updateHeaderSummary(result.summary);
-        
-        hideLoading();
       } catch (error) {
         console.error('Load error:', error);
+        showUserError('予約データの取得に失敗しました。シートの列名や存在を確認してください。\n' + error.message);
+      } finally {
         hideLoading();
-        alert('データ取得エラー: ' + error.message);
       }
     }
 
@@ -2195,9 +2197,8 @@
     // 分析モード：データ取得・表示
     // ========================================
     async function loadAnalysisData() {
+      showLoading();
       try {
-        showLoading();
-        
         const yearMonth = currentFilters.yearMonth;
         let bundle = analysisCache[yearMonth]?.bundle;
         
@@ -2213,17 +2214,17 @@
         renderKPIs(bundle.summary);
         renderSalesChart(bundle.trend);
         renderChurnTable(bundle.churnList);
-        
-        hideLoading();
       } catch (error) {
         console.error('Analysis load error:', error);
+        showUserError('分析データの取得に失敗しました。シートの列名や存在を確認してください。\n' + error.message);
+      } finally {
         hideLoading();
       }
     }
 
     async function loadSubTabData(sub) {
+      showLoading();
       try {
-        showLoading();
         const yearMonth = currentFilters.yearMonth;
         
         if (sub === 'customers') {
@@ -2248,10 +2249,10 @@
           }
           renderMenuAnalysis(data);
         }
-        
-        hideLoading();
       } catch (error) {
         console.error('Sub tab load error:', error);
+        showUserError('分析データの取得に失敗しました。シートの列名や存在を確認してください。\n' + error.message);
+      } finally {
         hideLoading();
       }
     }
@@ -2544,9 +2545,8 @@
     // CFモード：データ取得・計算・保存
     // ========================================
     async function loadCFData() {
+      showLoading();
       try {
-        showLoading();
-        
         let yearMonth = document.getElementById('cfYearMonth').value || currentFilters.yearMonth;
         if (!yearMonth && filterOptions.yearMonths.length > 0) {
           yearMonth = filterOptions.yearMonths[0];
@@ -2585,12 +2585,11 @@
         }
         
         calculateCashFlow();
-        
-        hideLoading();
       } catch (error) {
         console.error('CF load error:', error);
+        showUserError('CFデータの取得に失敗しました。シートの列名や存在を確認してください。\n' + error.message);
+      } finally {
         hideLoading();
-        alert('CFデータの取得に失敗しました: ' + error.message);
       }
     }
   
@@ -2648,9 +2647,8 @@
     }
 
     async function saveCFData() {
+      showLoading();
       try {
-        showLoading();
-        
         const yearMonth = document.getElementById('cfYearMonth').value;
         const data = {
           variable: parseInt(document.getElementById('inputVariable').value) || 0,
@@ -2662,13 +2660,12 @@
         };
         
         await runGAS('saveExpenses', yearMonth, data);
-        
-        hideLoading();
         alert('保存しました');
       } catch (error) {
         console.error('Save CF error:', error);
+        showUserError('保存エラー: ' + error.message);
+      } finally {
         hideLoading();
-        alert('保存エラー: ' + error.message);
       }
     }
 
