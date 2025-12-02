@@ -1765,12 +1765,18 @@
     function initEventListeners() {
       // グローバル年月変更
       document.getElementById('globalYearMonth').addEventListener('change', function() {
-        currentFilters.yearMonth = this.value;
+        const ym = this.value;
+        currentFilters.yearMonth = ym;
+        syncCFYearMonth(ym);
         loadReservations();
         
         // 分析モードの場合は分析データも更新
         if (currentMode === 'analysis') {
           loadAnalysisData();
+        }
+        // CFモードの場合はCFデータも更新
+        if (currentMode === 'cashflow') {
+          loadCFData();
         }
       });
 
@@ -1912,6 +1918,7 @@
         loadAnalysisData();
       } else if (mode === 'cashflow') {
         document.getElementById('cashflowMode').classList.add('active');
+        syncCFYearMonth(currentFilters.yearMonth);
         loadCFData();
       }
       
@@ -2483,7 +2490,13 @@
       try {
         showLoading();
         
-        const yearMonth = document.getElementById('cfYearMonth').value;
+        let yearMonth = document.getElementById('cfYearMonth').value || currentFilters.yearMonth;
+        if (!yearMonth && filterOptions.yearMonths.length > 0) {
+          yearMonth = filterOptions.yearMonths[0];
+        }
+        if (yearMonth && document.getElementById('cfYearMonth').value !== yearMonth) {
+          document.getElementById('cfYearMonth').value = yearMonth;
+        }
         
         // 売上を取得
         const sales = await runGAS('getMonthlySales', yearMonth);
@@ -2516,6 +2529,19 @@
       } catch (error) {
         console.error('CF load error:', error);
         hideLoading();
+        alert('CFデータの取得に失敗しました: ' + error.message);
+      }
+    }
+  
+    function syncCFYearMonth(ym) {
+      const cfSelect = document.getElementById('cfYearMonth');
+      if (!cfSelect) return;
+      
+      const hasOption = Array.from(cfSelect.options).some(opt => opt.value === ym);
+      if (ym && hasOption) {
+        cfSelect.value = ym;
+      } else if (!cfSelect.value && cfSelect.options.length > 0) {
+        cfSelect.value = cfSelect.options[0].value;
       }
     }
 
