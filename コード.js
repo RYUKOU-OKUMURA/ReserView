@@ -1,21 +1,33 @@
 /**
- * ReserView（リザビュー）- 予約集計ビューア
+ * 経営みえる化くん - 予約管理・経営分析システム
  * Google Apps Script バックエンド
+ * 
+ * Phase 1: モード切替UI + 経理モード
+ * Phase 2: 分析モード（TODO）
+ * Phase 3: CFモード（TODO）
  */
 
-// ★ ここにスプレッドシートIDを設定
+// ========================================
+// 設定
+// ========================================
 var SPREADSHEET_ID = '1z-OuS5riqLp8PYKECOnPzjBWPjgvUa6KKg5c4Ne-g08';
 var SHEET_NAME = 'Reservations';
+var PATIENTS_SHEET = 'Patients';
+var EXPENSES_SHEET = 'Expenses';  // Phase 3で使用
 
-/**
- * Webアプリのエントリーポイント
- */
+// ========================================
+// Webアプリ エントリーポイント
+// ========================================
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('index')
-    .setTitle('ReserView - 予約集計ビューア')
+    .setTitle('経営みえる化くん')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
+
+// ========================================
+// ユーティリティ関数
+// ========================================
 
 /**
  * シートのヘッダーインデックスを取得
@@ -82,8 +94,12 @@ function extractDay_(dateStr) {
   return 0;
 }
 
+// ========================================
+// 経理モード用関数（既存）
+// ========================================
+
 /**
- * フィルタ用の選択肢を取得（初期読み込み用）
+ * フィルタ用の選択肢を取得
  */
 function getFilterOptions() {
   try {
@@ -385,4 +401,268 @@ function updateReservation(rowIndex, updates) {
     console.error('updateReservation error:', error);
     throw new Error('更新エラー: ' + error.message);
   }
+}
+
+// ========================================
+// 分析モード用関数（Phase 2）
+// ========================================
+
+/**
+ * 分析ダッシュボード用データを取得
+ * @param {string} yearMonth - 対象年月（例: "2025-12"）
+ * @return {Object} ダッシュボードデータ
+ */
+function getAnalysisSummary(yearMonth) {
+  // TODO: Phase 2で実装
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var reservationsSheet = ss.getSheetByName(SHEET_NAME);
+    var patientsSheet = ss.getSheetByName(PATIENTS_SHEET);
+    
+    // 仮のデータを返す
+    return {
+      currentMonth: {
+        sales: 850000,
+        count: 95,
+        uniquePatients: 42
+      },
+      previousMonth: {
+        sales: 780000,
+        count: 88,
+        uniquePatients: 38
+      },
+      comparison: {
+        salesDiff: 70000,
+        salesRate: 8.97,
+        countDiff: 7,
+        countRate: 7.95
+      },
+      repeatRate: 78.5,
+      churnWarning: 6,
+      churnConfirmed: 7
+    };
+    
+  } catch (error) {
+    console.error('getAnalysisSummary error:', error);
+    throw new Error('分析データ取得エラー: ' + error.message);
+  }
+}
+
+/**
+ * 顧客分析データを取得
+ * @param {string} yearMonth - 対象年月
+ * @return {Object} 顧客分析データ
+ */
+function getCustomerAnalysis(yearMonth) {
+  // TODO: Phase 2で実装
+  return {
+    repeatRatePeriod: 78.5,
+    retentionRate: 65.2,
+    visitDistribution: {
+      '1回': 8,
+      '2-5回': 19,
+      '6-10回': 16,
+      '11回以上': 32
+    }
+  };
+}
+
+/**
+ * 離反リストを取得
+ * @param {string} baseDate - 基準日
+ * @return {Array} 離反リスト
+ */
+function getChurnList(baseDate) {
+  // TODO: Phase 2で実装
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var patientsSheet = ss.getSheetByName(PATIENTS_SHEET);
+    
+    if (!patientsSheet) {
+      return [];
+    }
+    
+    var data = patientsSheet.getDataRange().getValues();
+    var headers = data[0];
+    
+    // 列インデックスを取得
+    var col = {
+      id: headers.indexOf('患者ID'),
+      name: headers.indexOf('患者名'),
+      lastVisit: headers.indexOf('最終来院日'),
+      visitCount: headers.indexOf('来院回数'),
+      totalAmount: headers.indexOf('総支払額')
+    };
+    
+    var today = baseDate ? new Date(baseDate) : new Date();
+    var churnList = [];
+    
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var lastVisit = row[col.lastVisit];
+      
+      if (!lastVisit || !(lastVisit instanceof Date)) continue;
+      
+      var daysSince = Math.floor((today - lastVisit) / (1000 * 60 * 60 * 24));
+      
+      // 90日以上未来院の患者を抽出
+      if (daysSince >= 90) {
+        churnList.push({
+          patientId: row[col.id] || '',
+          patientName: row[col.name] || '',
+          lastVisit: formatDate_(lastVisit),
+          daysSinceVisit: daysSince,
+          status: daysSince >= 180 ? 'churned' : 'warning',
+          totalVisits: row[col.visitCount] || 0,
+          totalAmount: row[col.totalAmount] || 0
+        });
+      }
+    }
+    
+    // 未来院日数でソート
+    churnList.sort(function(a, b) {
+      return b.daysSinceVisit - a.daysSinceVisit;
+    });
+    
+    return churnList;
+    
+  } catch (error) {
+    console.error('getChurnList error:', error);
+    throw new Error('離反リスト取得エラー: ' + error.message);
+  }
+}
+
+/**
+ * 売上トレンドデータを取得
+ * @param {number} months - 取得する月数
+ * @return {Array} 月別売上データ
+ */
+function getSalesTrend(months) {
+  // TODO: Phase 2で実装
+  return [];
+}
+
+/**
+ * メニュー分析データを取得
+ * @param {string} yearMonth - 対象年月
+ * @return {Object} メニュー分析データ
+ */
+function getMenuAnalysis(yearMonth) {
+  // TODO: Phase 2で実装
+  return {
+    byMenu: [],
+    totalSales: 0
+  };
+}
+
+// ========================================
+// CFモード用関数（Phase 3）
+// ========================================
+
+/**
+ * 経費データを取得
+ * @param {string} yearMonth - 対象年月
+ * @return {Object} 経費データ
+ */
+function getExpenses(yearMonth) {
+  // TODO: Phase 3で実装
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(EXPENSES_SHEET);
+    
+    if (!sheet) {
+      return null;
+    }
+    
+    var data = sheet.getDataRange().getValues();
+    var headers = data[0];
+    
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === yearMonth) {
+        return {
+          yearMonth: yearMonth,
+          variable: data[i][1] || 0,
+          labor: data[i][2] || 0,
+          otherFixed: data[i][3] || 0,
+          depreciation: data[i][4] || 0,
+          loanPayment: data[i][5] || 0,
+          capex: data[i][6] || 0
+        };
+      }
+    }
+    
+    return null;
+    
+  } catch (error) {
+    console.error('getExpenses error:', error);
+    throw new Error('経費データ取得エラー: ' + error.message);
+  }
+}
+
+/**
+ * 経費データを保存
+ * @param {string} yearMonth - 対象年月
+ * @param {Object} data - 経費データ
+ * @return {Object} 結果
+ */
+function saveExpenses(yearMonth, data) {
+  // TODO: Phase 3で実装
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(EXPENSES_SHEET);
+    
+    // シートがなければ作成
+    if (!sheet) {
+      sheet = ss.insertSheet(EXPENSES_SHEET);
+      sheet.appendRow(['年月', '変動費', '人件費', 'その他固定費', '減価償却費', '借入返済', '設備投資', '更新日時', '更新者']);
+    }
+    
+    var existingData = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+    
+    // 既存データを検索
+    for (var i = 1; i < existingData.length; i++) {
+      if (existingData[i][0] === yearMonth) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    
+    var rowData = [
+      yearMonth,
+      data.variable || 0,
+      data.labor || 0,
+      data.otherFixed || 0,
+      data.depreciation || 0,
+      data.loanPayment || 0,
+      data.capex || 0,
+      new Date(),
+      Session.getActiveUser().getEmail()
+    ];
+    
+    if (rowIndex > 0) {
+      // 更新
+      sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      // 新規追加
+      sheet.appendRow(rowData);
+    }
+    
+    SpreadsheetApp.flush();
+    return { success: true };
+    
+  } catch (error) {
+    console.error('saveExpenses error:', error);
+    throw new Error('経費データ保存エラー: ' + error.message);
+  }
+}
+
+/**
+ * キャッシュフロー履歴を取得
+ * @param {number} months - 取得する月数
+ * @return {Array} CF履歴データ
+ */
+function getCashFlowHistory(months) {
+  // TODO: Phase 3で実装
+  return [];
 }

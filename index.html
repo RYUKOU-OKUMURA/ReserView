@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ReserView - 予約集計ビューア</title>
+  <title>経営みえる化くん</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --primary: #1A9178;
@@ -32,6 +33,16 @@
       --radius-sm: 10px;
       --radius-xs: 6px;
       --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      
+      /* 分析モード用カラー */
+      --success: #16a34a;
+      --success-light: #dcfce7;
+      --warning: #eab308;
+      --warning-light: #fef9c3;
+      --danger: #dc2626;
+      --danger-light: #fee2e2;
+      --info: #2563eb;
+      --info-light: #dbeafe;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -45,135 +56,51 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ===== 初期画面 ===== */
-    .init-screen {
+    /* ===== 初期ローディング ===== */
+    .init-loading {
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      padding: 24px;
-      background: linear-gradient(135deg, var(--bg) 0%, #EDF5F3 100%);
+      flex-direction: column;
+      gap: 16px;
     }
 
-    .init-card {
-      background: var(--card-bg);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow-lg);
-      padding: 48px 40px;
-      width: 100%;
-      max-width: 380px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
+    .init-loading .spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
     }
 
-    .init-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, var(--primary), var(--accent));
-    }
-
-    .init-logo {
-      font-family: 'DM Sans', sans-serif;
-      font-size: 32px;
-      font-weight: 700;
-      color: var(--primary);
-      margin-bottom: 4px;
-      letter-spacing: -0.5px;
-    }
-
-    .init-logo-icon {
-      display: inline-block;
-      width: 40px;
-      height: 40px;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-      border-radius: 10px;
-      margin-right: 10px;
-      vertical-align: middle;
-      position: relative;
-    }
-
-    .init-logo-icon::after {
-      content: '📊';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 20px;
-      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
-    }
-
-    .init-subtitle {
+    .init-loading p {
       color: var(--text-muted);
-      margin-bottom: 32px;
-      font-size: 15px;
+      font-size: 14px;
     }
 
-    .init-select {
-      width: 100%;
-      padding: 14px 18px;
-      border: 2px solid var(--border);
-      border-radius: var(--radius-sm);
-      font-size: 16px;
-      font-family: inherit;
-      background: white;
-      cursor: pointer;
-      margin-bottom: 20px;
-      transition: var(--transition);
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%238CA8A0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 14px center;
-    }
+    /* ===== アプリ全体 ===== */
+    .app { display: none; height: 100vh; overflow: hidden; flex-direction: column; }
+    .app.active { display: flex; }
 
-    .init-select:focus {
-      outline: none;
-      border-color: var(--primary);
-      box-shadow: var(--shadow-glow);
-    }
-
-    .init-btn {
-      width: 100%;
-      padding: 16px;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-      color: white;
-      border: none;
-      border-radius: var(--radius-sm);
-      font-size: 16px;
-      font-weight: 700;
-      font-family: inherit;
-      cursor: pointer;
-      transition: var(--transition);
-      box-shadow: 0 4px 12px rgba(26, 145, 120, 0.3);
-    }
-
-    .init-btn:hover:not(:disabled) {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(26, 145, 120, 0.4);
-    }
-
-    .init-btn:active:not(:disabled) { transform: translateY(0); }
-    .init-btn:disabled { background: #C5D4D0; cursor: not-allowed; box-shadow: none; }
-
-    /* ===== メイン画面 ===== */
-    .main-screen { display: none; height: 100vh; overflow: hidden; }
-    .main-screen.active { display: flex; flex-direction: column; }
-
-    /* ヘッダー */
+    /* ===== ヘッダー ===== */
     .header {
       background: var(--card-bg);
       border-bottom: 1px solid var(--border-light);
-      padding: 14px 24px;
+      padding: 12px 24px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-shrink: 0;
       box-shadow: var(--shadow-sm);
       z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 20px;
     }
 
     .logo {
@@ -187,8 +114,37 @@
       gap: 8px;
     }
 
-    .logo-icon {
-      font-size: 20px;
+    .header-month {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-month select {
+      padding: 8px 32px 8px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-xs);
+      font-size: 14px;
+      font-family: inherit;
+      background: white;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238CA8A0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      transition: var(--transition);
+    }
+
+    .header-month select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-glow);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
 
     .header-summary {
@@ -216,7 +172,80 @@
       font-weight: 500;
     }
 
-    /* フィルタエリア */
+    /* ===== モード切替タブ ===== */
+    .mode-tabs {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border-light);
+      padding: 0 24px;
+      display: flex;
+      gap: 0;
+      flex-shrink: 0;
+    }
+
+    .mode-tab {
+      padding: 14px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border: none;
+      background: none;
+      position: relative;
+      transition: var(--transition);
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mode-tab::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: transparent;
+      border-radius: 3px 3px 0 0;
+      transition: var(--transition);
+    }
+
+    .mode-tab:hover {
+      color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .mode-tab.active {
+      color: var(--primary);
+    }
+
+    .mode-tab.active::after {
+      background: var(--primary);
+    }
+
+    .mode-tab-icon {
+      font-size: 16px;
+    }
+
+    /* ===== コンテンツエリア ===== */
+    .content-area {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .mode-content {
+      display: none;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .mode-content.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ===== 経理モード ===== */
     .filter-area {
       background: var(--card-bg);
       padding: 14px 24px;
@@ -378,7 +407,7 @@
       letter-spacing: -0.3px;
     }
 
-    /* メインレイアウト - 50:50に変更 */
+    /* メインレイアウト */
     .main-container {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -677,7 +706,6 @@
       box-shadow: 0 0 0 2px var(--primary-glow);
     }
 
-    /* パネルフッター - 固定表示 */
     .panel-footer {
       padding: 16px 24px;
       border-top: 1px solid var(--border-light);
@@ -724,7 +752,457 @@
       border-color: var(--text-light);
     }
 
-    /* ローディング・空状態 */
+    /* ===== 分析モード ===== */
+    .analysis-content {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .sub-tabs {
+      background: var(--bg);
+      padding: 12px 24px;
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--border-light);
+      flex-shrink: 0;
+    }
+
+    .sub-tab {
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border: 1.5px solid var(--border);
+      background: white;
+      border-radius: var(--radius-sm);
+      transition: var(--transition);
+      font-family: inherit;
+    }
+
+    .sub-tab:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .sub-tab.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .analysis-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      background: var(--bg);
+      background-image: var(--bg-pattern);
+    }
+
+    .sub-content {
+      display: none;
+    }
+
+    .sub-content.active {
+      display: block;
+    }
+
+    /* KPIカード */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .kpi-card {
+      background: var(--card-bg);
+      border-radius: var(--radius-sm);
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--primary);
+    }
+
+    .kpi-card.warning::before { background: var(--warning); }
+    .kpi-card.danger::before { background: var(--danger); }
+    .kpi-card.success::before { background: var(--success); }
+
+    .kpi-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .kpi-value {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -1px;
+    }
+
+    .kpi-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .kpi-change {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .kpi-change.positive {
+      background: var(--success-light);
+      color: var(--success);
+    }
+
+    .kpi-change.negative {
+      background: var(--danger-light);
+      color: var(--danger);
+    }
+
+    /* チャートカード */
+    .chart-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+    }
+
+    .chart-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 300px;
+    }
+
+    /* テーブル */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card-bg);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: 14px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .data-table th {
+      background: var(--bg);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .data-table td {
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .data-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .data-table tr:hover td {
+      background: var(--primary-light);
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+
+    .status-dot.active { background: var(--success); }
+    .status-dot.warning { background: var(--warning); }
+    .status-dot.churned { background: var(--danger); }
+
+    /* ===== CFモード ===== */
+    .cf-content {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .cf-header {
+      background: var(--card-bg);
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .cf-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .cf-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      background: var(--bg);
+      background-image: var(--bg-pattern);
+    }
+
+    .cf-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    /* ブロックパズル */
+    .block-puzzle-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .block-puzzle-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .block-puzzle {
+      display: flex;
+      gap: 2px;
+      height: 320px;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    .block-sales {
+      width: 80px;
+      background: #dbeafe;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+      border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+    }
+
+    .block-right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .block-variable {
+      background: #f1f5f9;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .block-gross {
+      flex: 1;
+      display: flex;
+      gap: 2px;
+    }
+
+    .block-gross-left {
+      background: #dcfce7;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+      position: relative;
+    }
+
+    .block-fixed {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+    }
+
+    .block-labor {
+      background: #fce7f3;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+    }
+
+    .block-other-fixed {
+      background: #fef3c7;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+    }
+
+    .block-profit {
+      background: #fef08a;
+      padding: 16px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 0 0 var(--radius-sm) 0;
+    }
+
+    .block-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .block-value {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .block-rate {
+      font-size: 10px;
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.7);
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-top: 4px;
+    }
+
+    /* 入力フォーム */
+    .expense-form-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .expense-form-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 20px;
+    }
+
+    .expense-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .expense-item:last-child {
+      border-bottom: none;
+    }
+
+    .expense-label {
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .expense-input {
+      width: 140px;
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-xs);
+      font-size: 14px;
+      font-family: 'DM Sans', sans-serif;
+      text-align: right;
+      transition: var(--transition);
+    }
+
+    .expense-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-glow);
+    }
+
+    .expense-input:read-only {
+      background: var(--bg);
+      color: var(--text-muted);
+    }
+
+    .expense-result {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 2px solid var(--border);
+    }
+
+    .result-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+
+    .result-label {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .result-value {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .result-value.positive { color: var(--success); }
+    .result-value.negative { color: var(--danger); }
+
+    /* ===== 共通ユーティリティ ===== */
     .loading {
       display: flex;
       align-items: center;
@@ -788,25 +1266,13 @@
 
     .hidden { display: none !important; }
 
-    /* スクロールバースタイリング */
-    ::-webkit-scrollbar {
-      width: 8px;
-    }
+    /* スクロールバー */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-light); }
 
-    ::-webkit-scrollbar-track {
-      background: var(--bg);
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--text-light);
-    }
-
-    /* レスポンシブ対応 */
+    /* レスポンシブ */
     @media (max-width: 1024px) {
       .main-container {
         grid-template-columns: 1fr;
@@ -828,189 +1294,508 @@
       .right-column.open {
         transform: translateX(0);
       }
+
+      .cf-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .mode-tabs {
+        overflow-x: auto;
+        padding: 0 16px;
+      }
+
+      .mode-tab {
+        padding: 12px 16px;
+        white-space: nowrap;
+      }
+
+      .filter-area {
+        padding: 12px 16px;
+      }
+
+      .kpi-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .header {
+        padding: 12px 16px;
+      }
+
+      .header-left {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
     }
   </style>
 </head>
 <body>
 
-  <!-- 初期画面 -->
-  <div class="init-screen" id="initScreen">
-    <div class="init-card">
-      <div class="init-logo">
-        <span class="init-logo-icon"></span>ReserView
-      </div>
-      <p class="init-subtitle">表示する月を選んでください</p>
-      <select class="init-select" id="initYearMonth">
-        <option value="">読み込み中...</option>
-      </select>
-      <button class="init-btn" id="initBtn" disabled>開く</button>
-    </div>
+  <!-- 初期ローディング -->
+  <div class="init-loading" id="initLoading">
+    <div class="spinner"></div>
+    <p>読み込み中...</p>
   </div>
 
-  <!-- メイン画面 -->
-  <div class="main-screen" id="mainScreen">
-    
+  <!-- メインアプリ -->
+  <div class="app" id="app">
+    <!-- ヘッダー -->
     <header class="header">
-      <span class="logo">
-        <span class="logo-icon">📊</span>
-        ReserView
-      </span>
-      <div class="header-summary">
-        <span>合計</span>
-        <span class="header-amount" id="headerAmount">¥0</span>
-        <span class="header-count" id="headerCount">0件</span>
+      <div class="header-left">
+        <span class="logo">
+          <span class="logo-icon">📊</span>
+          ReserView
+        </span>
+        <div class="header-month">
+          <select id="globalYearMonth"></select>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="header-summary" id="headerSummary">
+          <span>合計</span>
+          <span class="header-amount" id="headerAmount">¥0</span>
+          <span class="header-count" id="headerCount">0件</span>
+        </div>
       </div>
     </header>
 
-    <div class="filter-area">
-      <div class="filter-row">
-        <div class="filter-group">
-          <span class="filter-label">📅</span>
-          <select class="filter-select" id="filterYearMonth"></select>
-        </div>
-        <div class="filter-group date-range">
-          <select class="filter-select filter-select-sm" id="filterStartDay">
-            <option value="0">1日</option>
-          </select>
-          <span class="date-separator">〜</span>
-          <select class="filter-select filter-select-sm" id="filterEndDay">
-            <option value="0">末日</option>
-          </select>
-        </div>
-        <button class="btn-reset" id="btnResetDate">リセット</button>
-        <div class="filter-group">
-          <span class="filter-label">💳</span>
-          <select class="filter-select" id="filterPayment">
-            <option value="all">すべて</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <span class="filter-label">🏷️</span>
-          <select class="filter-select" id="filterMenu">
-            <option value="all">すべて</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <span class="filter-label">👨‍⚕️</span>
-          <select class="filter-select" id="filterStaff">
-            <option value="all">すべて</option>
-          </select>
-        </div>
-      </div>
-      <div class="filter-row">
-        <input type="text" class="search-input" id="searchInput" placeholder="患者名で検索...">
-        <div class="filter-group">
-          <span class="filter-label">並び順</span>
-          <select class="filter-select" id="filterSort">
-            <option value="date-desc">日付 新→古</option>
-            <option value="date-asc">日付 古→新</option>
-            <option value="amount-desc">金額 高→低</option>
-            <option value="amount-asc">金額 低→高</option>
-            <option value="patient-asc">患者名 A→Z</option>
-          </select>
-        </div>
-        <div class="quick-filters">
-          <button class="quick-btn active" data-status="all">すべて</button>
-          <button class="quick-btn" data-status="予約確定">予約確定</button>
-          <button class="quick-btn" data-status="来院済み">来院済み</button>
-        </div>
-      </div>
+    <!-- モード切替タブ -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="accounting">
+        <span class="mode-tab-icon">📋</span>
+        経理モード
+      </button>
+      <button class="mode-tab" data-mode="analysis">
+        <span class="mode-tab-icon">📈</span>
+        分析モード
+      </button>
+      <button class="mode-tab" data-mode="cashflow">
+        <span class="mode-tab-icon">💰</span>
+        CFモード
+      </button>
     </div>
 
-    <div class="summary-bar" id="summaryBar">
-      <span class="summary-item">現金 <strong id="sumCash">¥0</strong></span>
-      <span class="summary-item">クレジット <strong id="sumCredit">¥0</strong></span>
-      <span class="summary-item">回数券 <strong id="sumTicket">¥0</strong></span>
-      <span class="summary-item">PayPay <strong id="sumPaypay">¥0</strong></span>
-    </div>
+    <!-- コンテンツエリア -->
+    <div class="content-area">
+      
+      <!-- 経理モード -->
+      <div class="mode-content active" id="accountingMode">
+        <div class="filter-area">
+          <div class="filter-row">
+            <div class="filter-group date-range">
+              <select class="filter-select filter-select-sm" id="filterStartDay">
+                <option value="0">1日〜</option>
+              </select>
+              <span class="date-separator">〜</span>
+              <select class="filter-select filter-select-sm" id="filterEndDay">
+                <option value="0">〜末日</option>
+              </select>
+            </div>
+            <button class="btn-reset" id="btnResetDate">リセット</button>
+            <div class="filter-group">
+              <span class="filter-label">💳</span>
+              <select class="filter-select" id="filterPayment">
+                <option value="all">すべて</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <span class="filter-label">🏷️</span>
+              <select class="filter-select" id="filterMenu">
+                <option value="all">すべて</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <span class="filter-label">👨‍⚕️</span>
+              <select class="filter-select" id="filterStaff">
+                <option value="all">すべて</option>
+              </select>
+            </div>
+          </div>
+          <div class="filter-row">
+            <input type="text" class="search-input" id="searchInput" placeholder="患者名で検索...">
+            <div class="filter-group">
+              <span class="filter-label">並び順</span>
+              <select class="filter-select" id="filterSort">
+                <option value="date-desc">日付 新→古</option>
+                <option value="date-asc">日付 古→新</option>
+                <option value="amount-desc">金額 高→低</option>
+                <option value="amount-asc">金額 低→高</option>
+                <option value="patient-asc">患者名 A→Z</option>
+              </select>
+            </div>
+            <div class="quick-filters">
+              <button class="quick-btn active" data-status="all">すべて</button>
+              <button class="quick-btn" data-status="予約確定">予約確定</button>
+              <button class="quick-btn" data-status="来院済み">来院済み</button>
+            </div>
+          </div>
+        </div>
 
-    <div class="main-container">
-      <div class="left-column" id="reservationList">
-        <div class="loading"><div class="spinner"></div></div>
+        <div class="summary-bar">
+          <span class="summary-item">現金 <strong id="sumCash">¥0</strong></span>
+          <span class="summary-item">クレジット <strong id="sumCredit">¥0</strong></span>
+          <span class="summary-item">回数券 <strong id="sumTicket">¥0</strong></span>
+          <span class="summary-item">PayPay <strong id="sumPaypay">¥0</strong></span>
+        </div>
+
+        <div class="main-container">
+          <div class="left-column" id="reservationList">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
+
+          <div class="right-column" id="rightColumn">
+            <div class="panel-empty" id="panelEmpty">
+              <div class="panel-empty-icon">📋</div>
+              <p>予約を選択してください</p>
+            </div>
+            
+            <div id="detailPanel" class="detail-panel hidden">
+              <div class="panel-header">
+                <div class="panel-title" id="panelTitle">-</div>
+                <div class="panel-subtitle" id="panelSubtitle">-</div>
+              </div>
+              
+              <div class="panel-content">
+                <div class="detail-section">
+                  <div class="section-title">予約情報</div>
+                  <div class="detail-grid">
+                    <div class="detail-item">
+                      <span class="detail-label">日付</span>
+                      <span class="detail-value" id="detailDate">-</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">時間</span>
+                      <span class="detail-value" id="detailTime">-</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">メニュー</span>
+                      <span class="detail-value" id="detailMenu">-</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">担当</span>
+                      <span class="detail-value" id="detailStaff">-</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="detail-section">
+                  <div class="section-title">編集</div>
+                  
+                  <div class="form-group">
+                    <label class="form-label">ステータス</label>
+                    <select class="form-select" id="editStatus">
+                      <option value="予約確定">予約確定</option>
+                      <option value="来院済み">来院済み</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">金額</label>
+                    <input type="number" class="form-input" id="editAmount" placeholder="0">
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">決済方法</label>
+                    <select class="form-select" id="editPayment">
+                      <option value="">未選択</option>
+                      <option value="現金">現金</option>
+                      <option value="クレジット">クレジット</option>
+                      <option value="回数券">回数券</option>
+                      <option value="PayPay">PayPay</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">メモ</label>
+                    <textarea class="form-textarea" id="editMemo" placeholder="メモを入力..."></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel-footer">
+                <button class="btn btn-primary" id="btnSave">保存する</button>
+                <button class="btn btn-secondary" id="btnClose">閉じる</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div class="right-column" id="rightColumn">
-        <div class="panel-empty" id="panelEmpty">
-          <div class="panel-empty-icon">📋</div>
-          <p>予約を選択してください</p>
-        </div>
-        
-        <div id="detailPanel" class="detail-panel hidden">
-          <div class="panel-header">
-            <div class="panel-title" id="panelTitle">-</div>
-            <div class="panel-subtitle" id="panelSubtitle">-</div>
+      <!-- 分析モード -->
+      <div class="mode-content" id="analysisMode">
+        <div class="analysis-content">
+          <div class="sub-tabs">
+            <button class="sub-tab active" data-sub="dashboard">ダッシュボード</button>
+            <button class="sub-tab" data-sub="customer">顧客分析</button>
+            <button class="sub-tab" data-sub="sales">売上トレンド</button>
+            <button class="sub-tab" data-sub="menu">メニュー分析</button>
           </div>
           
-          <div class="panel-content">
-            <div class="detail-section">
-              <div class="section-title">予約情報</div>
-              <div class="detail-grid">
-                <div class="detail-item">
-                  <span class="detail-label">日付</span>
-                  <span class="detail-value" id="detailDate">-</span>
+          <div class="analysis-main">
+            <!-- ダッシュボード -->
+            <div class="sub-content active" id="subDashboard">
+              <div class="kpi-grid">
+                <div class="kpi-card">
+                  <div class="kpi-label">今月売上</div>
+                  <div class="kpi-value" id="kpiSales">¥0</div>
+                  <div class="kpi-sub">
+                    <span id="kpiSalesChange" class="kpi-change positive">+0%</span>
+                    前月比
+                  </div>
                 </div>
-                <div class="detail-item">
-                  <span class="detail-label">時間</span>
-                  <span class="detail-value" id="detailTime">-</span>
+                <div class="kpi-card">
+                  <div class="kpi-label">来院数</div>
+                  <div class="kpi-value" id="kpiVisits">0</div>
+                  <div class="kpi-sub">人</div>
                 </div>
-                <div class="detail-item">
-                  <span class="detail-label">メニュー</span>
-                  <span class="detail-value" id="detailMenu">-</span>
+                <div class="kpi-card success">
+                  <div class="kpi-label">リピート率</div>
+                  <div class="kpi-value" id="kpiRepeat">0%</div>
+                  <div class="kpi-sub">2回以上来院</div>
                 </div>
-                <div class="detail-item">
-                  <span class="detail-label">担当</span>
-                  <span class="detail-value" id="detailStaff">-</span>
+                <div class="kpi-card warning">
+                  <div class="kpi-label">離反予備軍</div>
+                  <div class="kpi-value" id="kpiChurnWarning">0</div>
+                  <div class="kpi-sub">3-6ヶ月未来院</div>
+                </div>
+                <div class="kpi-card danger">
+                  <div class="kpi-label">離反確定</div>
+                  <div class="kpi-value" id="kpiChurnConfirmed">0</div>
+                  <div class="kpi-sub">6ヶ月以上未来院</div>
+                </div>
+              </div>
+
+              <div class="chart-card">
+                <div class="chart-title">📈 月別売上推移</div>
+                <div class="chart-container">
+                  <canvas id="salesChart"></canvas>
                 </div>
               </div>
             </div>
 
-            <div class="detail-section">
-              <div class="section-title">編集</div>
-              
-              <div class="form-group">
-                <label class="form-label">ステータス</label>
-                <select class="form-select" id="editStatus">
-                  <option value="予約確定">予約確定</option>
-                  <option value="来院済み">来院済み</option>
-                </select>
+            <!-- 顧客分析 -->
+            <div class="sub-content" id="subCustomer">
+              <div class="kpi-grid">
+                <div class="kpi-card">
+                  <div class="kpi-label">期間内リピート率</div>
+                  <div class="kpi-value" id="kpiRepeatPeriod">0%</div>
+                  <div class="kpi-sub">今月来院者のうちリピーター</div>
+                </div>
+                <div class="kpi-card">
+                  <div class="kpi-label">新規定着率</div>
+                  <div class="kpi-value" id="kpiRetention">0%</div>
+                  <div class="kpi-sub">3ヶ月以内に再来院</div>
+                </div>
               </div>
 
-              <div class="form-group">
-                <label class="form-label">金額</label>
-                <input type="number" class="form-input" id="editAmount" placeholder="0">
+              <div class="chart-card">
+                <div class="chart-title">👥 離反リスク顧客</div>
+                <table class="data-table" id="churnTable">
+                  <thead>
+                    <tr>
+                      <th>状態</th>
+                      <th>患者名</th>
+                      <th>最終来院</th>
+                      <th>未来院日数</th>
+                      <th>来院回数</th>
+                      <th>累計売上</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td colspan="6" class="empty-state">データを読み込み中...</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
-              <div class="form-group">
-                <label class="form-label">決済方法</label>
-                <select class="form-select" id="editPayment">
-                  <option value="">未選択</option>
-                  <option value="現金">現金</option>
-                  <option value="クレジット">クレジット</option>
-                  <option value="回数券">回数券</option>
-                  <option value="PayPay">PayPay</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label">メモ</label>
-                <textarea class="form-textarea" id="editMemo" placeholder="メモを入力..."></textarea>
+              <div class="chart-card">
+                <div class="chart-title">📊 来院回数分布</div>
+                <div class="chart-container">
+                  <canvas id="visitDistChart"></canvas>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="panel-footer">
-            <button class="btn btn-primary" id="btnSave">保存する</button>
-            <button class="btn btn-secondary" id="btnClose">閉じる</button>
+            <!-- 売上トレンド -->
+            <div class="sub-content" id="subSales">
+              <div class="chart-card">
+                <div class="chart-title">📅 月別売上推移（詳細）</div>
+                <div class="chart-container">
+                  <canvas id="salesDetailChart"></canvas>
+                </div>
+              </div>
+
+              <div class="chart-card">
+                <div class="chart-title">📆 曜日別平均売上</div>
+                <div class="chart-container">
+                  <canvas id="weekdayChart"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- メニュー分析 -->
+            <div class="sub-content" id="subMenu">
+              <div class="chart-card">
+                <div class="chart-title">🏷️ メニュー別売上構成</div>
+                <div class="chart-container">
+                  <canvas id="menuPieChart"></canvas>
+                </div>
+              </div>
+
+              <div class="chart-card">
+                <div class="chart-title">📋 メニュー別ランキング</div>
+                <table class="data-table" id="menuTable">
+                  <thead>
+                    <tr>
+                      <th>順位</th>
+                      <th>メニュー</th>
+                      <th>件数</th>
+                      <th>売上</th>
+                      <th>平均単価</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td colspan="5" class="empty-state">データを読み込み中...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- CFモード -->
+      <div class="mode-content" id="cashflowMode">
+        <div class="cf-content">
+          <div class="cf-header">
+            <div class="expense-form-title">💰 キャッシュフロー計算</div>
+            <div class="cf-actions">
+              <button class="btn btn-secondary" id="btnCopyPrev">前月コピー</button>
+              <button class="btn btn-primary" id="btnSaveCF">保存</button>
+            </div>
+          </div>
+
+          <div class="cf-main">
+            <div class="cf-grid">
+              <!-- ブロックパズル -->
+              <div class="block-puzzle-card">
+                <div class="block-puzzle-title">📊 お金のブロックパズル</div>
+                <div class="block-puzzle">
+                  <div class="block-sales">
+                    <div class="block-label">売上高</div>
+                    <div class="block-value" id="bpSales">¥0</div>
+                  </div>
+                  <div class="block-right">
+                    <div class="block-variable">
+                      <div class="block-label">変動費</div>
+                      <div class="block-value" id="bpVariable">¥0</div>
+                    </div>
+                    <div class="block-gross">
+                      <div class="block-gross-left">
+                        <div class="block-label">粗利</div>
+                        <div class="block-value" id="bpGross">¥0</div>
+                        <div class="block-rate" id="bpGrossRate">粗利率 0%</div>
+                      </div>
+                      <div class="block-fixed">
+                        <div class="block-labor">
+                          <div class="block-label">人件費</div>
+                          <div class="block-value" id="bpLabor">¥0</div>
+                          <div class="block-rate" id="bpLaborRate">労働分配率 0%</div>
+                        </div>
+                        <div class="block-other-fixed">
+                          <div class="block-label">その他固定費</div>
+                          <div class="block-value" id="bpOtherFixed">¥0</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="block-profit">
+                      <div>
+                        <div class="block-label">利益</div>
+                        <div class="block-value" id="bpProfit">¥0</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 入力フォーム -->
+              <div class="expense-form-card">
+                <div class="expense-form-title">経費入力</div>
+                
+                <div class="expense-item">
+                  <span class="expense-label">売上高（自動）</span>
+                  <input type="text" class="expense-input" id="cfSales" readonly>
+                </div>
+                <div class="expense-item">
+                  <span class="expense-label">変動費</span>
+                  <input type="number" class="expense-input" id="cfVariable" value="0">
+                </div>
+                <div class="expense-item">
+                  <span class="expense-label">人件費</span>
+                  <input type="number" class="expense-input" id="cfLabor" value="0">
+                </div>
+                <div class="expense-item">
+                  <span class="expense-label">その他固定費</span>
+                  <input type="number" class="expense-input" id="cfOtherFixed" value="0">
+                </div>
+                <div class="expense-item">
+                  <span class="expense-label">減価償却費</span>
+                  <input type="number" class="expense-input" id="cfDepreciation" value="0">
+                </div>
+                <div class="expense-item">
+                  <span class="expense-label">借入返済</span>
+                  <input type="number" class="expense-input" id="cfLoanPayment" value="0">
+                </div>
+                <div class="expense-item">
+                  <span class="expense-label">設備投資</span>
+                  <input type="number" class="expense-input" id="cfCapex" value="0">
+                </div>
+
+                <div class="expense-result">
+                  <div class="result-item">
+                    <span class="result-label">粗利</span>
+                    <span class="result-value" id="cfGross">¥0</span>
+                  </div>
+                  <div class="result-item">
+                    <span class="result-label">営業利益</span>
+                    <span class="result-value" id="cfProfit">¥0</span>
+                  </div>
+                  <div class="result-item">
+                    <span class="result-label">税引後利益</span>
+                    <span class="result-value" id="cfAfterTax">¥0</span>
+                  </div>
+                  <div class="result-item">
+                    <span class="result-label">繰越金</span>
+                    <span class="result-value" id="cfCarryover">¥0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
   <div class="toast" id="toast"></div>
 
   <script>
+    // ========================================
+    // グローバル状態
+    // ========================================
     var state = {
+      currentMode: 'accounting',
+      currentSubTab: 'dashboard',
       reservations: [],
       summary: {},
       filterOptions: {},
@@ -1026,16 +1811,83 @@
         search: '',
         sortKey: 'date',
         sortOrder: 'desc'
-      }
+      },
+      // 分析用データ
+      analysisData: null,
+      // CFデータ
+      cfData: {
+        sales: 0,
+        variable: 0,
+        labor: 0,
+        otherFixed: 0,
+        depreciation: 0,
+        loanPayment: 0,
+        capex: 0
+      },
+      // チャートインスタンス
+      charts: {}
     };
 
+    // ========================================
+    // 初期化
+    // ========================================
     document.addEventListener('DOMContentLoaded', init);
 
     function init() {
       loadFilterOptions();
       setupEventListeners();
+      handleHashChange();
+      window.addEventListener('hashchange', handleHashChange);
     }
 
+    // ========================================
+    // URL Hash管理
+    // ========================================
+    function handleHashChange() {
+      var hash = window.location.hash.slice(1) || 'accounting';
+      var validModes = ['accounting', 'analysis', 'cashflow'];
+      if (validModes.indexOf(hash) === -1) hash = 'accounting';
+      switchMode(hash, false);
+    }
+
+    function updateHash(mode) {
+      history.pushState(null, '', '#' + mode);
+    }
+
+    // ========================================
+    // モード切替
+    // ========================================
+    function switchMode(mode, updateUrl) {
+      if (updateUrl !== false) updateHash(mode);
+      
+      state.currentMode = mode;
+      
+      // タブ更新
+      document.querySelectorAll('.mode-tab').forEach(function(tab) {
+        tab.classList.toggle('active', tab.dataset.mode === mode);
+      });
+      
+      // コンテンツ更新
+      document.querySelectorAll('.mode-content').forEach(function(content) {
+        content.classList.remove('active');
+      });
+      document.getElementById(mode + 'Mode').classList.add('active');
+      
+      // ヘッダーサマリー表示切替
+      var headerSummary = document.getElementById('headerSummary');
+      headerSummary.style.display = (mode === 'accounting') ? 'flex' : 'none';
+      
+      // モード別のデータ読み込み
+      if (mode === 'analysis') {
+        loadAnalysisData();
+      } else if (mode === 'cashflow') {
+        loadCashflowData();
+      }
+    }
+
+    // ========================================
+    // サーバー通信
+    // ========================================
     function callServer(functionName) {
       var args = Array.prototype.slice.call(arguments, 1);
       return new Promise(function(resolve, reject) {
@@ -1046,20 +1898,35 @@
       });
     }
 
+    // ========================================
+    // フィルタオプション読み込み
+    // ========================================
     function loadFilterOptions() {
       callServer('getFilterOptions')
         .then(function(options) {
           state.filterOptions = options;
-          populateInitSelect(options.yearMonths);
-          document.getElementById('initBtn').disabled = false;
+          populateGlobalYearMonth(options.yearMonths);
+          populateFilters(options);
+          
+          // 初期値設定
+          if (options.yearMonths.length > 0) {
+            state.filters.yearMonth = options.yearMonths[0];
+          }
+          
+          // アプリ表示
+          document.getElementById('initLoading').style.display = 'none';
+          document.getElementById('app').classList.add('active');
+          
+          // データ読み込み
+          loadReservations();
         })
         .catch(function(error) {
           showToast('読み込みエラー: ' + error.message, 'error');
         });
     }
 
-    function populateInitSelect(yearMonths) {
-      var sel = document.getElementById('initYearMonth');
+    function populateGlobalYearMonth(yearMonths) {
+      var sel = document.getElementById('globalYearMonth');
       sel.innerHTML = '';
       yearMonths.forEach(function(ym) {
         var opt = document.createElement('option');
@@ -1069,20 +1936,7 @@
       });
     }
 
-    function populateMainFilters() {
-      var opts = state.filterOptions;
-      
-      // 年月
-      var ymSel = document.getElementById('filterYearMonth');
-      ymSel.innerHTML = '';
-      opts.yearMonths.forEach(function(ym) {
-        var opt = document.createElement('option');
-        opt.value = ym;
-        opt.textContent = ym.replace('-', '年') + '月';
-        if (ym === state.filters.yearMonth) opt.selected = true;
-        ymSel.appendChild(opt);
-      });
-      
+    function populateFilters(opts) {
       // 日付範囲
       var startSel = document.getElementById('filterStartDay');
       var endSel = document.getElementById('filterEndDay');
@@ -1131,12 +1985,29 @@
       });
     }
 
+    // ========================================
+    // イベントリスナー設定
+    // ========================================
     function setupEventListeners() {
-      // 初期画面
-      document.getElementById('initBtn').addEventListener('click', onOpenMain);
+      // モード切替
+      document.querySelectorAll('.mode-tab').forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          switchMode(tab.dataset.mode);
+        });
+      });
       
-      // フィルタ変更
-      document.getElementById('filterYearMonth').addEventListener('change', onFilterChange);
+      // グローバル月選択
+      document.getElementById('globalYearMonth').addEventListener('change', function(e) {
+        state.filters.yearMonth = e.target.value;
+        loadReservations();
+        if (state.currentMode === 'analysis') {
+          loadAnalysisData();
+        } else if (state.currentMode === 'cashflow') {
+          loadCashflowData();
+        }
+      });
+      
+      // 経理モードフィルタ
       document.getElementById('filterStartDay').addEventListener('change', onFilterChange);
       document.getElementById('filterEndDay').addEventListener('change', onFilterChange);
       document.getElementById('filterPayment').addEventListener('change', onFilterChange);
@@ -1144,7 +2015,6 @@
       document.getElementById('filterStaff').addEventListener('change', onFilterChange);
       document.getElementById('filterSort').addEventListener('change', onFilterChange);
       
-      // 日付リセット
       document.getElementById('btnResetDate').addEventListener('click', function() {
         document.getElementById('filterStartDay').value = '0';
         document.getElementById('filterEndDay').value = '0';
@@ -1153,7 +2023,6 @@
         loadReservations();
       });
       
-      // 検索
       var searchTimeout;
       document.getElementById('searchInput').addEventListener('input', function(e) {
         clearTimeout(searchTimeout);
@@ -1163,7 +2032,6 @@
         }, 300);
       });
       
-      // クイックフィルタ
       document.querySelectorAll('.quick-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
           document.querySelectorAll('.quick-btn').forEach(function(b) { b.classList.remove('active'); });
@@ -1173,29 +2041,40 @@
         });
       });
       
-      // 保存・閉じる
       document.getElementById('btnSave').addEventListener('click', saveReservation);
       document.getElementById('btnClose').addEventListener('click', closePanel);
+      
+      // 分析モード サブタブ
+      document.querySelectorAll('.sub-tab').forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          document.querySelectorAll('.sub-tab').forEach(function(t) { t.classList.remove('active'); });
+          tab.classList.add('active');
+          
+          document.querySelectorAll('.sub-content').forEach(function(c) { c.classList.remove('active'); });
+          document.getElementById('sub' + capitalizeFirst(tab.dataset.sub)).classList.add('active');
+          
+          state.currentSubTab = tab.dataset.sub;
+        });
+      });
+      
+      // CFモード 入力
+      var cfInputs = ['cfVariable', 'cfLabor', 'cfOtherFixed', 'cfDepreciation', 'cfLoanPayment', 'cfCapex'];
+      cfInputs.forEach(function(id) {
+        document.getElementById(id).addEventListener('input', updateCashflowCalculation);
+      });
+      
+      document.getElementById('btnCopyPrev').addEventListener('click', copyPreviousMonth);
+      document.getElementById('btnSaveCF').addEventListener('click', saveCashflow);
     }
 
-    function onOpenMain() {
-      var ym = document.getElementById('initYearMonth').value;
-      if (!ym) {
-        showToast('月を選択してください', 'error');
-        return;
-      }
-      
-      state.filters.yearMonth = ym;
-      
-      document.getElementById('initScreen').style.display = 'none';
-      document.getElementById('mainScreen').classList.add('active');
-      
-      populateMainFilters();
-      loadReservations();
+    function capitalizeFirst(str) {
+      return str.charAt(0).toUpperCase() + str.slice(1);
     }
 
+    // ========================================
+    // 経理モード機能
+    // ========================================
     function onFilterChange() {
-      state.filters.yearMonth = document.getElementById('filterYearMonth').value;
       state.filters.startDay = parseInt(document.getElementById('filterStartDay').value) || 0;
       state.filters.endDay = parseInt(document.getElementById('filterEndDay').value) || 0;
       state.filters.payment = document.getElementById('filterPayment').value;
@@ -1295,7 +2174,6 @@
       var panel = document.getElementById('detailPanel');
       panel.classList.remove('hidden');
       
-      // モバイル対応
       document.getElementById('rightColumn').classList.add('open');
       
       document.getElementById('panelTitle').textContent = r.patient + ' 様';
@@ -1352,6 +2230,125 @@
         });
     }
 
+    // ========================================
+    // 分析モード機能（プレースホルダー）
+    // ========================================
+    function loadAnalysisData() {
+      // TODO: Phase 2で実装
+      // 仮データを表示
+      document.getElementById('kpiSales').textContent = '¥850,000';
+      document.getElementById('kpiVisits').textContent = '95';
+      document.getElementById('kpiRepeat').textContent = '78.5%';
+      document.getElementById('kpiChurnWarning').textContent = '6';
+      document.getElementById('kpiChurnConfirmed').textContent = '7';
+      
+      // 仮のチャート描画
+      renderSalesChart();
+    }
+
+    function renderSalesChart() {
+      var ctx = document.getElementById('salesChart');
+      if (!ctx) return;
+      
+      if (state.charts.sales) {
+        state.charts.sales.destroy();
+      }
+      
+      state.charts.sales = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
+          datasets: [{
+            label: '売上',
+            data: [720000, 680000, 750000, 820000, 790000, 680000, 710000, 690000, 650000, 890000, 780000, 850000],
+            backgroundColor: 'rgba(26, 145, 120, 0.7)',
+            borderColor: 'rgba(26, 145, 120, 1)',
+            borderWidth: 1,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return '¥' + (value / 10000) + '万';
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // ========================================
+    // CFモード機能（プレースホルダー）
+    // ========================================
+    function loadCashflowData() {
+      // TODO: Phase 3で実装
+      // 仮データを表示
+      state.cfData.sales = state.summary.totalAmount || 850000;
+      document.getElementById('cfSales').value = '¥' + state.cfData.sales.toLocaleString();
+      updateCashflowCalculation();
+    }
+
+    function updateCashflowCalculation() {
+      var sales = state.cfData.sales;
+      var variable = parseInt(document.getElementById('cfVariable').value) || 0;
+      var labor = parseInt(document.getElementById('cfLabor').value) || 0;
+      var otherFixed = parseInt(document.getElementById('cfOtherFixed').value) || 0;
+      var depreciation = parseInt(document.getElementById('cfDepreciation').value) || 0;
+      var loanPayment = parseInt(document.getElementById('cfLoanPayment').value) || 0;
+      var capex = parseInt(document.getElementById('cfCapex').value) || 0;
+      
+      // 計算
+      var gross = sales - variable;
+      var grossRate = sales > 0 ? (gross / sales * 100).toFixed(1) : 0;
+      var fixedCost = labor + otherFixed;
+      var laborRate = gross > 0 ? (labor / gross * 100).toFixed(1) : 0;
+      var profit = gross - fixedCost;
+      var tax = profit > 0 ? Math.floor(profit * 0.3) : 0;
+      var afterTax = profit - tax;
+      var carryover = afterTax + depreciation - loanPayment - capex;
+      
+      // ブロックパズル更新
+      document.getElementById('bpSales').textContent = '¥' + sales.toLocaleString();
+      document.getElementById('bpVariable').textContent = '¥' + variable.toLocaleString();
+      document.getElementById('bpGross').textContent = '¥' + gross.toLocaleString();
+      document.getElementById('bpGrossRate').textContent = '粗利率 ' + grossRate + '%';
+      document.getElementById('bpLabor').textContent = '¥' + labor.toLocaleString();
+      document.getElementById('bpLaborRate').textContent = '労働分配率 ' + laborRate + '%';
+      document.getElementById('bpOtherFixed').textContent = '¥' + otherFixed.toLocaleString();
+      document.getElementById('bpProfit').textContent = '¥' + profit.toLocaleString();
+      
+      // 結果更新
+      document.getElementById('cfGross').textContent = '¥' + gross.toLocaleString();
+      document.getElementById('cfProfit').textContent = '¥' + profit.toLocaleString();
+      document.getElementById('cfProfit').className = 'result-value ' + (profit >= 0 ? 'positive' : 'negative');
+      document.getElementById('cfAfterTax').textContent = '¥' + afterTax.toLocaleString();
+      document.getElementById('cfCarryover').textContent = '¥' + carryover.toLocaleString();
+      document.getElementById('cfCarryover').className = 'result-value ' + (carryover >= 0 ? 'positive' : 'negative');
+    }
+
+    function copyPreviousMonth() {
+      // TODO: Phase 3で実装
+      showToast('前月データをコピーしました', 'success');
+    }
+
+    function saveCashflow() {
+      // TODO: Phase 3で実装
+      showToast('保存しました！', 'success');
+    }
+
+    // ========================================
+    // ユーティリティ
+    // ========================================
     function showToast(message, type) {
       var toast = document.getElementById('toast');
       toast.textContent = message;
