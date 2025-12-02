@@ -7,7 +7,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Sans:wght@500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --primary: #1A9178;
@@ -1646,6 +1645,14 @@
     };
     const annualSalesCache = {}; // { [year]: total }
     const monthlySalesCache = {}; // { [ym]: total }
+    // Chart.jsローダー（初期表示をブロックしない）
+    let chartJsPromise = null;
+    // 予約リスト仮想スクロール用
+    let reservationRowHeight = 120;
+    const VIRTUAL_BUFFER = 5;
+    let virtualTrack = null;
+    let virtualContainer = null;
+    let lastRenderRange = { start: 0, end: 0 };
 
     // ========================================
     // 初期化
@@ -1713,6 +1720,21 @@
 
     function showUserError(message) {
       alert(message);
+    }
+
+    // Chart.js を必要時にロード
+    function ensureChartJs() {
+      if (window.Chart) return Promise.resolve();
+      if (chartJsPromise) return chartJsPromise;
+      chartJsPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Chart.jsの読み込みに失敗しました'));
+        document.head.appendChild(script);
+      });
+      return chartJsPromise;
     }
 
     // ========================================
@@ -2011,7 +2033,7 @@
         const summary = calculateLocalSummary(filtered);
         reservations = filtered;
 
-        renderReservations();
+        renderReservations({ preserveScroll: true });
         updateSummary(summary);
         updateHeaderSummary(summary);
 
@@ -2019,8 +2041,8 @@
           const found = reservations.find(r => r.rowIndex === prevSelectedRow);
           if (found) {
             selectedReservation = found;
-            document.querySelector(`.reservation-card[data-row="${prevSelectedRow}"]`)?.classList.add('selected');
             renderDetailPanel();
+            updateVirtualReservations(true);
           } else if (selectedReservation) {
             selectedReservation = null;
             renderDetailPanel();
@@ -2135,9 +2157,13 @@
       };
     }
 
-    function renderReservations() {
+    function renderReservations(options = {}) {
+      const { preserveScroll = false } = options;
       const container = document.getElementById('reservationList');
-      
+      const prevScroll = preserveScroll ? container.scrollTop : 0;
+
+      container.innerHTML = '';
+
       if (reservations.length === 0) {
         container.innerHTML = `
           <div class="empty-state">
@@ -2145,28 +2171,31 @@
             <p>該当する予約がありません</p>
           </div>
         `;
+        virtualTrack = null;
         return;
       }
-      
-      container.innerHTML = reservations.map(r => `
-        <div class="reservation-card" data-row="${r.rowIndex}" onclick="selectReservation(${r.rowIndex})">
-          <div class="card-row">
-            <div class="card-main">
-              <span class="card-date">${r.date}</span>
-              <span class="card-time">${r.start}</span>
-              <span class="card-patient">${r.patient}</span>
-            </div>
-            <span class="status-badge ${r.status === '完了' ? 'completed' : 'confirmed'}">${r.status}</span>
-          </div>
-          <div class="card-row">
-            <span class="card-menu">${r.menu}</span>
-            <div class="card-main">
-              <span class="card-amount">¥${r.amount.toLocaleString()}</span>
-              <span class="card-payment">${r.payment}</span>
-            </div>
-          </div>
-        </div>
-      `).join('');
+
+      const track = document.createElement('div');
+      track.id = 'reservationVirtualTrack';
+      track.style.position = 'relative';
+      track.style.height = `${reservationRowHeight * reservations.length}px`;
+      track.style.width = '100%';
+
+      container.appendChild(track);
+      virtualTrack = track;
+      virtualContainer = container;
+      lastRenderRange = { start: 0, end: 0 };
+
+      container.removeEventListener('scroll', handleVirtualScroll);
+      container.addEventListener('scroll', handleVirtualScroll);
+
+      if (preserveScroll) {
+        container.scrollTop = prevScroll;
+      } else {
+        container.scrollTop = 0;
+      }
+
+      updateVirtualReservations(true);
     }
 
     function updateSummary(summary) {
@@ -2201,12 +2230,7 @@
 
     function selectReservation(rowIndex) {
       selectedReservation = reservations.find(r => r.rowIndex === rowIndex);
-      
-      // カードの選択状態を更新
-      document.querySelectorAll('.reservation-card').forEach(card => {
-        card.classList.toggle('selected', parseInt(card.dataset.row) === rowIndex);
-      });
-      
+      updateVirtualReservations(true);
       // 詳細パネルを表示
       renderDetailPanel();
     }
@@ -2294,6 +2318,82 @@
       renderDetailPanel();
     }
 
+    function handleVirtualScroll() {
+      updateVirtualReservations(false);
+    }
+
+    function updateVirtualReservations(force) {
+      if (!virtualContainer || !virtualTrack) return;
+      const scrollTop = virtualContainer.scrollTop;
+      const viewHeight = virtualContainer.clientHeight;
+      const total = reservations.length;
+      if (total === 0) return;
+
+      const start = Math.max(Math.floor(scrollTop / reservationRowHeight) - VIRTUAL_BUFFER, 0);
+      const end = Math.min(total, Math.ceil((scrollTop + viewHeight) / reservationRowHeight) + VIRTUAL_BUFFER);
+
+      if (!force && start === lastRenderRange.start && end === lastRenderRange.end) {
+        return;
+      }
+      lastRenderRange = { start, end };
+
+      virtualTrack.innerHTML = '';
+      const frag = document.createDocumentFragment();
+
+      for (let i = start; i < end; i++) {
+        const card = createReservationCard(reservations[i]);
+        card.style.position = 'absolute';
+        card.style.left = '0';
+        card.style.right = '0';
+        card.style.top = `${i * reservationRowHeight}px`;
+        frag.appendChild(card);
+      }
+
+      virtualTrack.appendChild(frag);
+
+      const firstCard = virtualTrack.firstElementChild;
+      if (firstCard) {
+        const measured = firstCard.getBoundingClientRect().height;
+        if (measured && Math.abs(measured - reservationRowHeight) > 2) {
+          reservationRowHeight = measured;
+          virtualTrack.style.height = `${reservationRowHeight * total}px`;
+          lastRenderRange = { start: -1, end: -1 };
+          updateVirtualReservations(true);
+          return;
+        }
+      }
+    }
+
+    function createReservationCard(r) {
+      const card = document.createElement('div');
+      card.className = 'reservation-card';
+      card.dataset.row = r.rowIndex;
+      if (selectedReservation && selectedReservation.rowIndex === r.rowIndex) {
+        card.classList.add('selected');
+      }
+      card.addEventListener('click', () => selectReservation(r.rowIndex));
+
+      card.innerHTML = `
+        <div class="card-row">
+          <div class="card-main">
+            <span class="card-date">${r.date}</span>
+            <span class="card-time">${r.start}</span>
+            <span class="card-patient">${r.patient}</span>
+          </div>
+          <span class="status-badge ${r.status === '完了' ? 'completed' : 'confirmed'}">${r.status}</span>
+        </div>
+        <div class="card-row">
+          <span class="card-menu">${r.menu}</span>
+          <div class="card-main">
+            <span class="card-amount">¥${r.amount.toLocaleString()}</span>
+            <span class="card-payment">${r.payment}</span>
+          </div>
+        </div>
+      `;
+
+      return card;
+    }
+
     async function saveReservation() {
       if (!selectedReservation) return;
       
@@ -2335,6 +2435,7 @@
     async function loadAnalysisData() {
       showLoading();
       try {
+        await ensureChartJs();
         const yearMonth = currentFilters.yearMonth;
         let bundle = analysisCache[yearMonth]?.bundle;
         
@@ -2361,6 +2462,7 @@
     async function loadSubTabData(sub) {
       showLoading();
       try {
+        await ensureChartJs();
         const yearMonth = currentFilters.yearMonth;
         
         if (sub === 'customers') {
@@ -2456,6 +2558,7 @@
           }]
         },
         options: {
+          animation: false,
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
@@ -2533,6 +2636,7 @@
           }]
         },
         options: {
+          animation: false,
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
@@ -2569,6 +2673,7 @@
           }]
         },
         options: {
+          animation: false,
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
@@ -2610,6 +2715,7 @@
           }]
         },
         options: {
+          animation: false,
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
@@ -2655,6 +2761,7 @@
           }]
         },
         options: {
+          animation: false,
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
