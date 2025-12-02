@@ -1635,6 +1635,8 @@
     let salesTrendChart = null;
     let countTrendChart = null;
     let menuPieChart = null;
+    // 予約データキャッシュ（年月ごと）
+    const reservationCache = {};
     // フロント側キャッシュ
     const analysisCache = {}; // { [ym]: { bundle } }
     const analysisSubCache = {
@@ -1660,8 +1662,13 @@
           currentMode = hash;
         }
 
-        // フィルタオプションを取得
-        filterOptions = await runGAS('getFilterOptions');
+        // 初期データをまとめて取得
+        const initialData = await runGAS('getInitialData');
+        filterOptions = initialData.filterOptions || filterOptions;
+        currentFilters.yearMonth = initialData.selectedYearMonth || currentFilters.yearMonth;
+        if (currentFilters.yearMonth) {
+          reservationCache[currentFilters.yearMonth] = initialData.reservations || [];
+        }
         
         // UIを初期化
         initGlobalYearMonth();
@@ -1669,7 +1676,7 @@
         initEventListeners();
         
         // データを取得
-        await loadReservations();
+        await loadReservations({ preserveSelection: false });
         
         // モードを設定
         switchMode(currentMode);
@@ -1721,11 +1728,13 @@
         option.textContent = formatYearMonthDisplay(ym);
         select.appendChild(option);
       });
-      
-      // 今月があれば選択、なければ最新
+
+      // 既定の選択を優先し、なければ今月→最新
       const now = new Date();
       const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      if (filterOptions.yearMonths.includes(currentYM)) {
+      if (currentFilters.yearMonth && filterOptions.yearMonths.includes(currentFilters.yearMonth)) {
+        select.value = currentFilters.yearMonth;
+      } else if (filterOptions.yearMonths.includes(currentYM)) {
         select.value = currentYM;
         currentFilters.yearMonth = currentYM;
       } else if (filterOptions.yearMonths.length > 0) {
@@ -1749,7 +1758,11 @@
       });
       
       if (filterOptions.yearMonths.length > 0) {
-        select.value = currentFilters.yearMonth || filterOptions.yearMonths[0];
+        if (currentFilters.yearMonth && filterOptions.yearMonths.includes(currentFilters.yearMonth)) {
+          select.value = currentFilters.yearMonth;
+        } else {
+          select.value = filterOptions.yearMonths[0];
+        }
       }
     }
 
@@ -1978,21 +1991,148 @@
     // ========================================
     // 経理モード：データ取得・表示
     // ========================================
-    async function loadReservations() {
-      showLoading();
+    async function loadReservations(options = {}) {
+      const { preserveSelection = false } = options;
+      const ym = currentFilters.yearMonth;
+      const prevSelectedRow = preserveSelection && selectedReservation ? selectedReservation.rowIndex : null;
+      const needsFetch = ym && !reservationCache[ym];
+      if (needsFetch) showLoading();
       try {
-        const result = await runGAS('getReservations', currentFilters);
-        reservations = result.reservations;
-        
+        if (needsFetch) {
+          const data = await runGAS('getInitialData', ym);
+          if (data.filterOptions) {
+            filterOptions = data.filterOptions;
+          }
+          reservationCache[ym] = data.reservations || [];
+        }
+
+        const baseList = reservationCache[ym] || [];
+        const filtered = filterReservations(baseList);
+        const summary = calculateLocalSummary(filtered);
+        reservations = filtered;
+
         renderReservations();
-        updateSummary(result.summary);
-        updateHeaderSummary(result.summary);
+        updateSummary(summary);
+        updateHeaderSummary(summary);
+
+        if (prevSelectedRow) {
+          const found = reservations.find(r => r.rowIndex === prevSelectedRow);
+          if (found) {
+            selectedReservation = found;
+            document.querySelector(`.reservation-card[data-row="${prevSelectedRow}"]`)?.classList.add('selected');
+            renderDetailPanel();
+          } else if (selectedReservation) {
+            selectedReservation = null;
+            renderDetailPanel();
+          }
+        }
       } catch (error) {
         console.error('Load error:', error);
         showUserError('予約データの取得に失敗しました。シートの列名や存在を確認してください。\n' + error.message);
       } finally {
         hideLoading();
       }
+    }
+
+    function filterReservations(list) {
+      const filtered = list.filter(r => matchesFiltersLocal(r));
+      return sortReservationsLocal(filtered, currentFilters.sortKey, currentFilters.sortOrder);
+    }
+
+    function matchesFiltersLocal(record) {
+      if (currentFilters.yearMonth && record.yearMonth !== currentFilters.yearMonth) return false;
+
+      const startDay = parseInt(currentFilters.startDay) || 0;
+      const endDay = parseInt(currentFilters.endDay) || 0;
+
+      if (startDay && record.day < startDay) return false;
+      if (endDay && record.day > endDay) return false;
+
+      if (currentFilters.status && currentFilters.status !== 'all' && record.status !== currentFilters.status) return false;
+      if (currentFilters.staff && currentFilters.staff !== 'all' && record.staff !== currentFilters.staff) return false;
+      if (currentFilters.payment && currentFilters.payment !== 'all' && record.payment !== currentFilters.payment) return false;
+      if (currentFilters.menu && currentFilters.menu !== 'all' && record.menu !== currentFilters.menu) return false;
+
+      if (currentFilters.search && currentFilters.search !== '') {
+        const searchLower = currentFilters.search.toLowerCase();
+        const patientLower = (record.patient || '').toLowerCase();
+        if (patientLower.indexOf(searchLower) === -1) return false;
+      }
+
+      return true;
+    }
+
+    function sortReservationsLocal(resList, sortKey, sortOrder) {
+      const multiplier = (sortOrder === 'asc') ? 1 : -1;
+      const copy = resList.slice();
+
+      copy.sort(function(a, b) {
+        switch (sortKey) {
+          case 'date':
+            if (a.date !== b.date) {
+              return (a.date < b.date ? -1 : 1) * multiplier;
+            }
+            return (a.start < b.start ? -1 : 1) * multiplier;
+          case 'amount':
+            return (a.amount - b.amount) * multiplier;
+          case 'patient':
+            return a.patient.localeCompare(b.patient, 'ja') * multiplier;
+          case 'menu':
+            return a.menu.localeCompare(b.menu, 'ja') * multiplier;
+          default:
+            return 0;
+        }
+      });
+
+      return copy;
+    }
+
+    function calculateLocalSummary(resList) {
+      const summary = createEmptySummaryLocal();
+      summary.totalCount = resList.length;
+
+      resList.forEach(r => {
+        summary.totalAmount += r.amount;
+
+        if (summary.byPayment.hasOwnProperty(r.payment)) {
+          summary.byPayment[r.payment] += r.amount;
+        } else if (r.payment) {
+          summary.byPayment[r.payment] = (summary.byPayment[r.payment] || 0) + r.amount;
+        }
+
+        if (r.menu) {
+          if (!summary.byMenu[r.menu]) {
+            summary.byMenu[r.menu] = { count: 0, amount: 0 };
+          }
+          summary.byMenu[r.menu].count++;
+          summary.byMenu[r.menu].amount += r.amount;
+        }
+
+        if (r.patient) {
+          if (!summary.byPatient[r.patient]) {
+            summary.byPatient[r.patient] = { count: 0, amount: 0 };
+          }
+          summary.byPatient[r.patient].count++;
+          summary.byPatient[r.patient].amount += r.amount;
+        }
+      });
+
+      return summary;
+    }
+
+    function createEmptySummaryLocal() {
+      return {
+        totalCount: 0,
+        totalAmount: 0,
+        byPayment: {
+          '現金': 0,
+          'クレジット': 0,
+          '回数券': 0,
+          'PayPay': 0
+        },
+        byMenu: {},
+        byPatient: {}
+      };
     }
 
     function renderReservations() {
@@ -2169,27 +2309,23 @@
         
         await runGAS('updateReservation', selectedReservation.rowIndex, updates);
         
-        // ローカルデータを更新
-        selectedReservation.amount = updates.amount;
-        selectedReservation.status = updates.status;
-        selectedReservation.payment = updates.payment;
-        selectedReservation.memo = updates.memo;
-        
-        // 再描画
-        renderReservations();
-        renderDetailPanel();
-        
-        // 選択状態を維持
-        document.querySelector(`.reservation-card[data-row="${selectedReservation.rowIndex}"]`)?.classList.add('selected');
-        
-        // 集計を再計算
-        await loadReservations();
-        
-        hideLoading();
+        // ローカルキャッシュを更新
+        selectedReservation = { ...selectedReservation, ...updates };
+        const ym = currentFilters.yearMonth;
+        if (ym && reservationCache[ym]) {
+          const idx = reservationCache[ym].findIndex(r => r.rowIndex === selectedReservation.rowIndex);
+          if (idx !== -1) {
+            reservationCache[ym][idx] = { ...reservationCache[ym][idx], ...updates };
+          }
+        }
+
+        // 集計・表示を再計算（選択は維持）
+        await loadReservations({ preserveSelection: true });
       } catch (error) {
         console.error('Save error:', error);
+        showUserError('保存エラー: ' + error.message);
+      } finally {
         hideLoading();
-        alert('保存エラー: ' + error.message);
       }
     }
 

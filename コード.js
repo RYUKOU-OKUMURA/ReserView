@@ -222,6 +222,108 @@ function getFilterOptions() {
 }
 
 /**
+ * 初期データ一括取得（フィルタ選択肢 + 対象月の予約 + サマリー）
+ * @param {string} yearMonth - 対象年月（省略時は今月 or 最新月）
+ * @return {Object} { filterOptions, reservations, summary, selectedYearMonth }
+ */
+function getInitialData(yearMonth) {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    if (!sheet) {
+      throw new Error('シートが見つかりません: ' + SHEET_NAME);
+    }
+    var data = getSheetValues_(sheet);
+    if (data.length < 2) {
+      return {
+        filterOptions: { staff: [], menu: [], payment: [], status: [], yearMonths: [] },
+        reservations: [],
+        summary: createEmptySummary_(),
+        selectedYearMonth: yearMonth || ''
+      };
+    }
+
+    var headers = data[0];
+    var col = getColumnIndexes_(headers);
+    var staffSet = {};
+    var menuSet = {};
+    var paymentSet = {};
+    var statusSet = {};
+    var yearMonthSet = {};
+    var allReservations = [];
+
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[col.id] && !row[col.patient]) continue;
+
+      var formattedDate = formatDate_(row[col.date]);
+      var formattedStart = formatTime_(row[col.start]);
+      var formattedEnd = formatTime_(row[col.end]);
+      var amount = parseAmount_(row[col.amount]);
+      var ym = formattedDate ? formattedDate.substring(0, 7).replace('/', '-') : '';
+      var day = extractDay_(formattedDate);
+
+      if (row[col.staff]) staffSet[row[col.staff]] = true;
+      if (row[col.menu]) menuSet[row[col.menu]] = true;
+      if (row[col.payment]) paymentSet[row[col.payment]] = true;
+      if (row[col.status]) statusSet[row[col.status]] = true;
+      if (ym) yearMonthSet[ym] = true;
+
+      allReservations.push({
+        rowIndex: i + 1,
+        date: formattedDate,
+        yearMonth: ym,
+        day: day,
+        start: formattedStart,
+        end: formattedEnd,
+        patient: row[col.patient] || '',
+        menu: row[col.menu] || '',
+        amount: amount,
+        staff: row[col.staff] || '',
+        payment: row[col.payment] || '',
+        memo: row[col.memo] || '',
+        status: row[col.status] || '',
+        id: row[col.id] || '',
+        lane: row[col.lane] || ''
+      });
+    }
+
+    var yearMonths = Object.keys(yearMonthSet).sort().reverse();
+    var selectedYM = yearMonth;
+    var currentYM = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM');
+    if (!selectedYM) {
+      if (yearMonths.indexOf(currentYM) !== -1) {
+        selectedYM = currentYM;
+      } else {
+        selectedYM = yearMonths[0] || '';
+      }
+    }
+
+    var filteredReservations = allReservations.filter(function(r) {
+      if (!selectedYM) return true;
+      return r.yearMonth === selectedYM;
+    });
+
+    var summary = calculateSummary_(filteredReservations);
+
+    return {
+      filterOptions: {
+        staff: Object.keys(staffSet).sort(),
+        menu: Object.keys(menuSet).sort(),
+        payment: Object.keys(paymentSet).sort(),
+        status: Object.keys(statusSet).sort(),
+        yearMonths: yearMonths
+      },
+      reservations: filteredReservations,
+      summary: summary,
+      selectedYearMonth: selectedYM
+    };
+  } catch (error) {
+    console.error('getInitialData error:', error);
+    throw new Error('初期データ取得エラー: ' + error.message);
+  }
+}
+
+/**
  * 予約データを取得
  */
 function getReservations(filters) {
