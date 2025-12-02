@@ -34,7 +34,6 @@
       --radius-xs: 6px;
       --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       
-      /* 分析モード用カラー */
       --success: #16a34a;
       --success-light: #dcfce7;
       --warning: #eab308;
@@ -56,7 +55,6 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ===== 初期ローディング ===== */
     .init-loading {
       display: flex;
       align-items: center;
@@ -75,16 +73,18 @@
       animation: spin 0.8s linear infinite;
     }
 
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     .init-loading p {
       color: var(--text-muted);
       font-size: 14px;
     }
 
-    /* ===== アプリ全体 ===== */
     .app { display: none; height: 100vh; overflow: hidden; flex-direction: column; }
     .app.active { display: flex; }
 
-    /* ===== ヘッダー ===== */
     .header {
       background: var(--card-bg);
       border-bottom: 1px solid var(--border-light);
@@ -104,8 +104,8 @@
     }
 
     .logo {
-      font-family: 'DM Sans', sans-serif;
-      font-size: 22px;
+      font-family: 'Zen Kaku Gothic New', sans-serif;
+      font-size: 20px;
       font-weight: 700;
       color: var(--primary);
       letter-spacing: -0.5px;
@@ -113,6 +113,8 @@
       align-items: center;
       gap: 8px;
     }
+
+    .logo-icon { font-size: 22px; }
 
     .header-month {
       display: flex;
@@ -172,7 +174,6 @@
       font-weight: 500;
     }
 
-    /* ===== モード切替タブ ===== */
     .mode-tabs {
       background: var(--card-bg);
       border-bottom: 1px solid var(--border-light);
@@ -227,7 +228,6 @@
       font-size: 16px;
     }
 
-    /* ===== コンテンツエリア ===== */
     .content-area {
       flex: 1;
       min-height: 0;
@@ -245,7 +245,7 @@
       flex-direction: column;
     }
 
-    /* ===== 経理モード ===== */
+    /* 経理モード */
     .filter-area {
       background: var(--card-bg);
       padding: 14px 24px;
@@ -382,7 +382,6 @@
       font-weight: 500;
     }
 
-    /* 集計バー */
     .summary-bar {
       background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
       color: white;
@@ -407,7 +406,6 @@
       letter-spacing: -0.3px;
     }
 
-    /* メインレイアウト */
     .main-container {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -416,7 +414,6 @@
       overflow: hidden;
     }
 
-    /* 左カラム - 予約リスト */
     .left-column {
       overflow-y: auto;
       padding: 16px 20px;
@@ -424,7 +421,6 @@
       background-image: var(--bg-pattern);
     }
 
-    /* 予約カード */
     .reservation-card {
       background: var(--card-bg);
       border-radius: var(--radius-sm);
@@ -547,7 +543,6 @@
       font-weight: 500;
     }
 
-    /* 右カラム - 編集パネル */
     .right-column {
       background: var(--card-bg);
       border-left: 1px solid var(--border-light);
@@ -578,7 +573,6 @@
       color: var(--text-muted);
     }
 
-    /* 詳細パネル */
     .detail-panel {
       display: flex;
       flex-direction: column;
@@ -752,7 +746,7 @@
       border-color: var(--text-light);
     }
 
-    /* ===== 分析モード ===== */
+    /* 分析モード */
     .analysis-content {
       display: flex;
       flex-direction: column;
@@ -808,7 +802,6 @@
       display: block;
     }
 
-    /* KPIカード */
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -881,7 +874,6 @@
       color: var(--danger);
     }
 
-    /* チャートカード */
     .chart-card {
       background: var(--card-bg);
       border-radius: var(--radius);
@@ -905,7 +897,6 @@
       height: 300px;
     }
 
-    /* テーブル */
     .data-table {
       width: 100%;
       border-collapse: collapse;
@@ -956,7 +947,7 @@
     .status-dot.warning { background: var(--warning); }
     .status-dot.churned { background: var(--danger); }
 
-    /* ===== CFモード ===== */
+    /* CFモード */
     .cf-content {
       display: flex;
       flex-direction: column;
@@ -973,9 +964,36 @@
       flex-shrink: 0;
     }
 
+    .cf-month-select {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
     .cf-actions {
       display: flex;
       gap: 12px;
+    }
+
+    .btn-sm {
+      padding: 10px 18px;
+      font-size: 13px;
+      border-radius: var(--radius-xs);
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      font-family: inherit;
+    }
+
+    .btn-outline {
+      background: white;
+      border: 1.5px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--primary);
+      color: var(--primary);
     }
 
     .cf-main {
@@ -992,7 +1010,6 @@
       gap: 24px;
     }
 
-    /* ブロックパズル */
     .block-puzzle-card {
       background: var(--card-bg);
       border-radius: var(--radius);
@@ -1120,7 +1137,6 @@
       margin-top: 4px;
     }
 
-    /* 入力フォーム */
     .expense-form-card {
       background: var(--card-bg);
       border-radius: var(--radius);
@@ -1202,145 +1218,45 @@
     .result-value.positive { color: var(--success); }
     .result-value.negative { color: var(--danger); }
 
-    /* ===== 共通ユーティリティ ===== */
-    .loading {
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,0.8);
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 60px;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
     }
 
-    .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid var(--border);
-      border-top-color: var(--primary);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+    .loading-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
     }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
 
     .empty-state {
       text-align: center;
-      padding: 60px 24px;
+      padding: 60px 20px;
       color: var(--text-muted);
     }
 
-    .empty-icon {
-      font-size: 56px;
+    .empty-state-icon {
+      font-size: 48px;
       margin-bottom: 16px;
       opacity: 0.5;
-    }
-
-    /* トースト */
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%) translateY(100px);
-      background: var(--text);
-      color: white;
-      padding: 14px 28px;
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-      font-weight: 500;
-      opacity: 0;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 1000;
-      box-shadow: var(--shadow-lg);
-    }
-
-    .toast.show {
-      transform: translateX(-50%) translateY(0);
-      opacity: 1;
-    }
-
-    .toast.success {
-      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-    }
-
-    .toast.error {
-      background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
-    }
-
-    .hidden { display: none !important; }
-
-    /* スクロールバー */
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: var(--bg); }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--text-light); }
-
-    /* レスポンシブ */
-    @media (max-width: 1024px) {
-      .main-container {
-        grid-template-columns: 1fr;
-      }
-
-      .right-column {
-        position: fixed;
-        top: 0;
-        right: 0;
-        width: 100%;
-        max-width: 400px;
-        height: 100vh;
-        z-index: 200;
-        transform: translateX(100%);
-        transition: transform 0.3s ease;
-        box-shadow: -8px 0 32px rgba(0,0,0,0.15);
-      }
-
-      .right-column.open {
-        transform: translateX(0);
-      }
-
-      .cf-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-
-    @media (max-width: 768px) {
-      .mode-tabs {
-        overflow-x: auto;
-        padding: 0 16px;
-      }
-
-      .mode-tab {
-        padding: 12px 16px;
-        white-space: nowrap;
-      }
-
-      .filter-area {
-        padding: 12px 16px;
-      }
-
-      .kpi-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .header {
-        padding: 12px 16px;
-      }
-
-      .header-left {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-      }
     }
   </style>
 </head>
 <body>
-
   <!-- 初期ローディング -->
   <div class="init-loading" id="initLoading">
     <div class="spinner"></div>
-    <p>読み込み中...</p>
+    <p>データを読み込んでいます...</p>
   </div>
 
   <!-- メインアプリ -->
@@ -1348,17 +1264,16 @@
     <!-- ヘッダー -->
     <header class="header">
       <div class="header-left">
-        <span class="logo">
+        <div class="logo">
           <span class="logo-icon">📊</span>
-          ReserView
-        </span>
+          経営みえる化くん
+        </div>
         <div class="header-month">
           <select id="globalYearMonth"></select>
         </div>
       </div>
       <div class="header-right">
-        <div class="header-summary" id="headerSummary">
-          <span>合計</span>
+        <div class="header-summary">
           <span class="header-amount" id="headerAmount">¥0</span>
           <span class="header-count" id="headerCount">0件</span>
         </div>
@@ -1366,162 +1281,84 @@
     </header>
 
     <!-- モード切替タブ -->
-    <div class="mode-tabs">
+    <nav class="mode-tabs">
       <button class="mode-tab active" data-mode="accounting">
-        <span class="mode-tab-icon">📋</span>
-        経理モード
+        <span class="mode-tab-icon">💰</span>
+        経理
       </button>
       <button class="mode-tab" data-mode="analysis">
         <span class="mode-tab-icon">📈</span>
-        分析モード
+        分析
       </button>
       <button class="mode-tab" data-mode="cashflow">
-        <span class="mode-tab-icon">💰</span>
-        CFモード
+        <span class="mode-tab-icon">🧩</span>
+        CF
       </button>
-    </div>
+    </nav>
 
     <!-- コンテンツエリア -->
     <div class="content-area">
-      
       <!-- 経理モード -->
       <div class="mode-content active" id="accountingMode">
         <div class="filter-area">
           <div class="filter-row">
-            <div class="filter-group date-range">
-              <select class="filter-select filter-select-sm" id="filterStartDay">
-                <option value="0">1日〜</option>
-              </select>
-              <span class="date-separator">〜</span>
-              <select class="filter-select filter-select-sm" id="filterEndDay">
-                <option value="0">〜末日</option>
-              </select>
-            </div>
-            <button class="btn-reset" id="btnResetDate">リセット</button>
             <div class="filter-group">
-              <span class="filter-label">💳</span>
-              <select class="filter-select" id="filterPayment">
+              <span class="filter-label">日付</span>
+              <div class="date-range">
+                <select id="filterStartDay" class="filter-select filter-select-sm">
+                  <option value="">開始</option>
+                </select>
+                <span class="date-separator">〜</span>
+                <select id="filterEndDay" class="filter-select filter-select-sm">
+                  <option value="">終了</option>
+                </select>
+              </div>
+            </div>
+            <div class="filter-group">
+              <span class="filter-label">ステータス</span>
+              <select id="filterStatus" class="filter-select">
                 <option value="all">すべて</option>
               </select>
             </div>
             <div class="filter-group">
-              <span class="filter-label">🏷️</span>
-              <select class="filter-select" id="filterMenu">
+              <span class="filter-label">決済</span>
+              <select id="filterPayment" class="filter-select">
                 <option value="all">すべて</option>
               </select>
             </div>
             <div class="filter-group">
-              <span class="filter-label">👨‍⚕️</span>
-              <select class="filter-select" id="filterStaff">
+              <span class="filter-label">メニュー</span>
+              <select id="filterMenu" class="filter-select">
                 <option value="all">すべて</option>
               </select>
             </div>
+            <button class="btn-reset" id="resetFilters">リセット</button>
           </div>
           <div class="filter-row">
             <input type="text" class="search-input" id="searchInput" placeholder="患者名で検索...">
-            <div class="filter-group">
-              <span class="filter-label">並び順</span>
-              <select class="filter-select" id="filterSort">
-                <option value="date-desc">日付 新→古</option>
-                <option value="date-asc">日付 古→新</option>
-                <option value="amount-desc">金額 高→低</option>
-                <option value="amount-asc">金額 低→高</option>
-                <option value="patient-asc">患者名 A→Z</option>
-              </select>
-            </div>
             <div class="quick-filters">
-              <button class="quick-btn active" data-status="all">すべて</button>
-              <button class="quick-btn" data-status="予約確定">予約確定</button>
-              <button class="quick-btn" data-status="来院済み">来院済み</button>
+              <button class="quick-btn" data-status="確定">確定のみ</button>
+              <button class="quick-btn" data-status="完了">完了のみ</button>
             </div>
           </div>
         </div>
 
-        <div class="summary-bar">
-          <span class="summary-item">現金 <strong id="sumCash">¥0</strong></span>
-          <span class="summary-item">クレジット <strong id="sumCredit">¥0</strong></span>
-          <span class="summary-item">回数券 <strong id="sumTicket">¥0</strong></span>
-          <span class="summary-item">PayPay <strong id="sumPaypay">¥0</strong></span>
+        <div class="summary-bar" id="summaryBar">
+          <div class="summary-item">合計: <strong id="summaryTotal">¥0</strong></div>
+          <div class="summary-item">現金: <strong id="summaryCash">¥0</strong></div>
+          <div class="summary-item">クレジット: <strong id="summaryCredit">¥0</strong></div>
+          <div class="summary-item">回数券: <strong id="summaryTicket">¥0</strong></div>
+          <div class="summary-item">PayPay: <strong id="summaryPaypay">¥0</strong></div>
         </div>
 
         <div class="main-container">
           <div class="left-column" id="reservationList">
-            <div class="loading"><div class="spinner"></div></div>
+            <!-- 予約カードがここに入る -->
           </div>
-
-          <div class="right-column" id="rightColumn">
-            <div class="panel-empty" id="panelEmpty">
+          <div class="right-column" id="detailPanel">
+            <div class="panel-empty">
               <div class="panel-empty-icon">📋</div>
               <p>予約を選択してください</p>
-            </div>
-            
-            <div id="detailPanel" class="detail-panel hidden">
-              <div class="panel-header">
-                <div class="panel-title" id="panelTitle">-</div>
-                <div class="panel-subtitle" id="panelSubtitle">-</div>
-              </div>
-              
-              <div class="panel-content">
-                <div class="detail-section">
-                  <div class="section-title">予約情報</div>
-                  <div class="detail-grid">
-                    <div class="detail-item">
-                      <span class="detail-label">日付</span>
-                      <span class="detail-value" id="detailDate">-</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">時間</span>
-                      <span class="detail-value" id="detailTime">-</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">メニュー</span>
-                      <span class="detail-value" id="detailMenu">-</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">担当</span>
-                      <span class="detail-value" id="detailStaff">-</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="detail-section">
-                  <div class="section-title">編集</div>
-                  
-                  <div class="form-group">
-                    <label class="form-label">ステータス</label>
-                    <select class="form-select" id="editStatus">
-                      <option value="予約確定">予約確定</option>
-                      <option value="来院済み">来院済み</option>
-                    </select>
-                  </div>
-
-                  <div class="form-group">
-                    <label class="form-label">金額</label>
-                    <input type="number" class="form-input" id="editAmount" placeholder="0">
-                  </div>
-
-                  <div class="form-group">
-                    <label class="form-label">決済方法</label>
-                    <select class="form-select" id="editPayment">
-                      <option value="">未選択</option>
-                      <option value="現金">現金</option>
-                      <option value="クレジット">クレジット</option>
-                      <option value="回数券">回数券</option>
-                      <option value="PayPay">PayPay</option>
-                    </select>
-                  </div>
-
-                  <div class="form-group">
-                    <label class="form-label">メモ</label>
-                    <textarea class="form-textarea" id="editMemo" placeholder="メモを入力..."></textarea>
-                  </div>
-                </div>
-              </div>
-
-              <div class="panel-footer">
-                <button class="btn btn-primary" id="btnSave">保存する</button>
-                <button class="btn btn-secondary" id="btnClose">閉じる</button>
-              </div>
             </div>
           </div>
         </div>
@@ -1532,91 +1369,56 @@
         <div class="analysis-content">
           <div class="sub-tabs">
             <button class="sub-tab active" data-sub="dashboard">ダッシュボード</button>
-            <button class="sub-tab" data-sub="customer">顧客分析</button>
+            <button class="sub-tab" data-sub="customers">顧客分析</button>
             <button class="sub-tab" data-sub="sales">売上トレンド</button>
             <button class="sub-tab" data-sub="menu">メニュー分析</button>
           </div>
-          
           <div class="analysis-main">
             <!-- ダッシュボード -->
-            <div class="sub-content active" id="subDashboard">
-              <div class="kpi-grid">
-                <div class="kpi-card">
-                  <div class="kpi-label">今月売上</div>
-                  <div class="kpi-value" id="kpiSales">¥0</div>
-                  <div class="kpi-sub">
-                    <span id="kpiSalesChange" class="kpi-change positive">+0%</span>
-                    前月比
-                  </div>
-                </div>
-                <div class="kpi-card">
-                  <div class="kpi-label">来院数</div>
-                  <div class="kpi-value" id="kpiVisits">0</div>
-                  <div class="kpi-sub">人</div>
-                </div>
-                <div class="kpi-card success">
-                  <div class="kpi-label">リピート率</div>
-                  <div class="kpi-value" id="kpiRepeat">0%</div>
-                  <div class="kpi-sub">2回以上来院</div>
-                </div>
-                <div class="kpi-card warning">
-                  <div class="kpi-label">離反予備軍</div>
-                  <div class="kpi-value" id="kpiChurnWarning">0</div>
-                  <div class="kpi-sub">3-6ヶ月未来院</div>
-                </div>
-                <div class="kpi-card danger">
-                  <div class="kpi-label">離反確定</div>
-                  <div class="kpi-value" id="kpiChurnConfirmed">0</div>
-                  <div class="kpi-sub">6ヶ月以上未来院</div>
-                </div>
+            <div class="sub-content active" id="dashboardContent">
+              <div class="kpi-grid" id="kpiGrid">
+                <!-- KPIカードがここに入る -->
               </div>
-
               <div class="chart-card">
-                <div class="chart-title">📈 月別売上推移</div>
+                <div class="chart-title">📈 売上推移（過去12ヶ月）</div>
                 <div class="chart-container">
                   <canvas id="salesChart"></canvas>
                 </div>
               </div>
-            </div>
-
-            <!-- 顧客分析 -->
-            <div class="sub-content" id="subCustomer">
-              <div class="kpi-grid">
-                <div class="kpi-card">
-                  <div class="kpi-label">期間内リピート率</div>
-                  <div class="kpi-value" id="kpiRepeatPeriod">0%</div>
-                  <div class="kpi-sub">今月来院者のうちリピーター</div>
-                </div>
-                <div class="kpi-card">
-                  <div class="kpi-label">新規定着率</div>
-                  <div class="kpi-value" id="kpiRetention">0%</div>
-                  <div class="kpi-sub">3ヶ月以内に再来院</div>
-                </div>
-              </div>
-
               <div class="chart-card">
-                <div class="chart-title">👥 離反リスク顧客</div>
+                <div class="chart-title">⚠️ 離反リスト</div>
                 <table class="data-table" id="churnTable">
                   <thead>
                     <tr>
-                      <th>状態</th>
+                      <th>ステータス</th>
                       <th>患者名</th>
                       <th>最終来院</th>
-                      <th>未来院日数</th>
+                      <th>経過日数</th>
                       <th>来院回数</th>
-                      <th>累計売上</th>
+                      <th>総支払額</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    <tr>
-                      <td colspan="6" class="empty-state">データを読み込み中...</td>
-                    </tr>
+                  <tbody id="churnTableBody">
+                    <!-- 離反リストがここに入る -->
                   </tbody>
                 </table>
               </div>
+            </div>
 
+            <!-- 顧客分析 -->
+            <div class="sub-content" id="customersContent">
+              <div class="kpi-grid">
+                <div class="kpi-card">
+                  <div class="kpi-label">総顧客数（来院履歴あり）</div>
+                  <div class="kpi-value" id="totalPatients">-</div>
+                </div>
+                <div class="kpi-card">
+                  <div class="kpi-label">平均来院回数</div>
+                  <div class="kpi-value" id="avgVisits">-</div>
+                </div>
+              </div>
               <div class="chart-card">
-                <div class="chart-title">📊 来院回数分布</div>
+                <div class="chart-title">👥 来院回数分布</div>
                 <div class="chart-container">
                   <canvas id="visitDistChart"></canvas>
                 </div>
@@ -1624,47 +1426,52 @@
             </div>
 
             <!-- 売上トレンド -->
-            <div class="sub-content" id="subSales">
+            <div class="sub-content" id="salesContent">
               <div class="chart-card">
-                <div class="chart-title">📅 月別売上推移（詳細）</div>
+                <div class="chart-title">💰 月別売上推移</div>
                 <div class="chart-container">
-                  <canvas id="salesDetailChart"></canvas>
+                  <canvas id="salesTrendChart"></canvas>
                 </div>
               </div>
-
               <div class="chart-card">
-                <div class="chart-title">📆 曜日別平均売上</div>
+                <div class="chart-title">📊 月別来院数推移</div>
                 <div class="chart-container">
-                  <canvas id="weekdayChart"></canvas>
+                  <canvas id="countTrendChart"></canvas>
                 </div>
               </div>
             </div>
 
             <!-- メニュー分析 -->
-            <div class="sub-content" id="subMenu">
+            <div class="sub-content" id="menuContent">
+              <div class="kpi-grid">
+                <div class="kpi-card">
+                  <div class="kpi-label">今月メニュー数</div>
+                  <div class="kpi-value" id="menuCount">-</div>
+                </div>
+                <div class="kpi-card">
+                  <div class="kpi-label">今月売上</div>
+                  <div class="kpi-value" id="menuTotalSales">-</div>
+                </div>
+              </div>
               <div class="chart-card">
-                <div class="chart-title">🏷️ メニュー別売上構成</div>
+                <div class="chart-title">🍰 メニュー別売上構成</div>
                 <div class="chart-container">
                   <canvas id="menuPieChart"></canvas>
                 </div>
               </div>
-
               <div class="chart-card">
-                <div class="chart-title">📋 メニュー別ランキング</div>
+                <div class="chart-title">📋 メニュー別詳細</div>
                 <table class="data-table" id="menuTable">
                   <thead>
                     <tr>
-                      <th>順位</th>
                       <th>メニュー</th>
                       <th>件数</th>
                       <th>売上</th>
-                      <th>平均単価</th>
+                      <th>構成比</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    <tr>
-                      <td colspan="5" class="empty-state">データを読み込み中...</td>
-                    </tr>
+                  <tbody id="menuTableBody">
+                    <!-- メニュー分析がここに入る -->
                   </tbody>
                 </table>
               </div>
@@ -1677,105 +1484,105 @@
       <div class="mode-content" id="cashflowMode">
         <div class="cf-content">
           <div class="cf-header">
-            <div class="expense-form-title">💰 キャッシュフロー計算</div>
+            <div class="cf-month-select">
+              <span class="filter-label">対象月:</span>
+              <select id="cfYearMonth" class="filter-select"></select>
+            </div>
             <div class="cf-actions">
-              <button class="btn btn-secondary" id="btnCopyPrev">前月コピー</button>
-              <button class="btn btn-primary" id="btnSaveCF">保存</button>
+              <button class="btn-sm btn-outline" id="cfCopyPrev">前月コピー</button>
+              <button class="btn-sm btn-primary" id="cfSave">保存</button>
             </div>
           </div>
-
           <div class="cf-main">
             <div class="cf-grid">
-              <!-- ブロックパズル -->
               <div class="block-puzzle-card">
-                <div class="block-puzzle-title">📊 お金のブロックパズル</div>
+                <div class="block-puzzle-title">🧩 ブロックパズル</div>
                 <div class="block-puzzle">
                   <div class="block-sales">
-                    <div class="block-label">売上高</div>
-                    <div class="block-value" id="bpSales">¥0</div>
+                    <div class="block-label">売上</div>
+                    <div class="block-value" id="blockSales">¥0</div>
                   </div>
                   <div class="block-right">
                     <div class="block-variable">
                       <div class="block-label">変動費</div>
-                      <div class="block-value" id="bpVariable">¥0</div>
+                      <div class="block-value" id="blockVariable">¥0</div>
+                      <div class="block-rate" id="blockVariableRate">0%</div>
                     </div>
                     <div class="block-gross">
                       <div class="block-gross-left">
                         <div class="block-label">粗利</div>
-                        <div class="block-value" id="bpGross">¥0</div>
-                        <div class="block-rate" id="bpGrossRate">粗利率 0%</div>
+                        <div class="block-value" id="blockGross">¥0</div>
+                        <div class="block-rate" id="blockGrossRate">粗利率 0%</div>
                       </div>
                       <div class="block-fixed">
                         <div class="block-labor">
                           <div class="block-label">人件費</div>
-                          <div class="block-value" id="bpLabor">¥0</div>
-                          <div class="block-rate" id="bpLaborRate">労働分配率 0%</div>
+                          <div class="block-value" id="blockLabor">¥0</div>
+                          <div class="block-rate" id="blockLaborRate">労働分配率 0%</div>
                         </div>
                         <div class="block-other-fixed">
                           <div class="block-label">その他固定費</div>
-                          <div class="block-value" id="bpOtherFixed">¥0</div>
+                          <div class="block-value" id="blockOtherFixed">¥0</div>
                         </div>
-                      </div>
-                    </div>
-                    <div class="block-profit">
-                      <div>
-                        <div class="block-label">利益</div>
-                        <div class="block-value" id="bpProfit">¥0</div>
+                        <div class="block-profit">
+                          <div>
+                            <div class="block-label">営業利益</div>
+                            <div class="block-value" id="blockProfit">¥0</div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <!-- 入力フォーム -->
               <div class="expense-form-card">
-                <div class="expense-form-title">経費入力</div>
-                
+                <div class="expense-form-title">📝 経費入力</div>
                 <div class="expense-item">
-                  <span class="expense-label">売上高（自動）</span>
-                  <input type="text" class="expense-input" id="cfSales" readonly>
+                  <span class="expense-label">売上（自動取得）</span>
+                  <input type="text" class="expense-input" id="inputSales" readonly>
                 </div>
                 <div class="expense-item">
                   <span class="expense-label">変動費</span>
-                  <input type="number" class="expense-input" id="cfVariable" value="0">
+                  <input type="number" class="expense-input" id="inputVariable" value="0">
                 </div>
                 <div class="expense-item">
                   <span class="expense-label">人件費</span>
-                  <input type="number" class="expense-input" id="cfLabor" value="0">
+                  <input type="number" class="expense-input" id="inputLabor" value="0">
                 </div>
                 <div class="expense-item">
                   <span class="expense-label">その他固定費</span>
-                  <input type="number" class="expense-input" id="cfOtherFixed" value="0">
+                  <input type="number" class="expense-input" id="inputOtherFixed" value="0">
                 </div>
                 <div class="expense-item">
                   <span class="expense-label">減価償却費</span>
-                  <input type="number" class="expense-input" id="cfDepreciation" value="0">
+                  <input type="number" class="expense-input" id="inputDepreciation" value="0">
                 </div>
                 <div class="expense-item">
                   <span class="expense-label">借入返済</span>
-                  <input type="number" class="expense-input" id="cfLoanPayment" value="0">
+                  <input type="number" class="expense-input" id="inputLoanPayment" value="0">
                 </div>
                 <div class="expense-item">
                   <span class="expense-label">設備投資</span>
-                  <input type="number" class="expense-input" id="cfCapex" value="0">
+                  <input type="number" class="expense-input" id="inputCapex" value="0">
                 </div>
 
                 <div class="expense-result">
                   <div class="result-item">
                     <span class="result-label">粗利</span>
-                    <span class="result-value" id="cfGross">¥0</span>
+                    <span class="result-value" id="resultGross">¥0</span>
                   </div>
                   <div class="result-item">
                     <span class="result-label">営業利益</span>
-                    <span class="result-value" id="cfProfit">¥0</span>
+                    <span class="result-value" id="resultProfit">¥0</span>
                   </div>
                   <div class="result-item">
-                    <span class="result-label">税引後利益</span>
-                    <span class="result-value" id="cfAfterTax">¥0</span>
+                    <span class="result-label">税引後利益（税率30%）</span>
+                    <span class="result-value" id="resultAfterTax">¥0</span>
                   </div>
                   <div class="result-item">
                     <span class="result-label">繰越金</span>
-                    <span class="result-value" id="cfCarryover">¥0</span>
+                    <span class="result-value" id="resultCarryover">¥0</span>
                   </div>
                 </div>
               </div>
@@ -1783,486 +1590,666 @@
           </div>
         </div>
       </div>
-
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
-
+  <!-- ローディングオーバーレイ -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+  </div>
   <script>
     // ========================================
-    // グローバル状態
+    // グローバル変数
     // ========================================
-    var state = {
-      currentMode: 'accounting',
-      currentSubTab: 'dashboard',
-      reservations: [],
-      summary: {},
-      filterOptions: {},
-      selectedRowIndex: null,
-      filters: {
-        yearMonth: '',
-        startDay: 0,
-        endDay: 0,
-        payment: 'all',
-        menu: 'all',
-        staff: 'all',
-        status: 'all',
-        search: '',
-        sortKey: 'date',
-        sortOrder: 'desc'
-      },
-      // 分析用データ
-      analysisData: null,
-      // CFデータ
-      cfData: {
-        sales: 0,
-        variable: 0,
-        labor: 0,
-        otherFixed: 0,
-        depreciation: 0,
-        loanPayment: 0,
-        capex: 0
-      },
-      // チャートインスタンス
-      charts: {}
+    let reservations = [];
+    let selectedReservation = null;
+    let filterOptions = { staff: [], menu: [], payment: [], status: [], yearMonths: [] };
+    let currentFilters = {
+      yearMonth: '',
+      startDay: '',
+      endDay: '',
+      status: 'all',
+      staff: 'all',
+      payment: 'all',
+      menu: 'all',
+      search: '',
+      sortKey: 'date',
+      sortOrder: 'desc'
     };
+    let currentMode = 'accounting';
+    let currentSubTab = 'dashboard';
+    
+    // Chart.jsインスタンス
+    let salesChart = null;
+    let visitDistChart = null;
+    let salesTrendChart = null;
+    let countTrendChart = null;
+    let menuPieChart = null;
 
     // ========================================
     // 初期化
     // ========================================
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', function() {
+      initApp();
+    });
 
-    function init() {
-      loadFilterOptions();
-      setupEventListeners();
-      handleHashChange();
-      window.addEventListener('hashchange', handleHashChange);
+    async function initApp() {
+      try {
+        // URLハッシュからモードを取得
+        const hash = window.location.hash.replace('#', '');
+        if (['accounting', 'analysis', 'cashflow'].includes(hash)) {
+          currentMode = hash;
+        }
+
+        // フィルタオプションを取得
+        filterOptions = await runGAS('getFilterOptions');
+        
+        // UIを初期化
+        initGlobalYearMonth();
+        initFilterOptions();
+        initEventListeners();
+        
+        // データを取得
+        await loadReservations();
+        
+        // モードを設定
+        switchMode(currentMode);
+        
+        // アプリを表示
+        document.getElementById('initLoading').style.display = 'none';
+        document.getElementById('app').classList.add('active');
+        
+      } catch (error) {
+        console.error('Init error:', error);
+        alert('初期化エラー: ' + error.message);
+      }
     }
 
     // ========================================
-    // URL Hash管理
+    // GAS通信
     // ========================================
-    function handleHashChange() {
-      var hash = window.location.hash.slice(1) || 'accounting';
-      var validModes = ['accounting', 'analysis', 'cashflow'];
-      if (validModes.indexOf(hash) === -1) hash = 'accounting';
-      switchMode(hash, false);
+    function runGAS(functionName, ...args) {
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          [functionName](...args);
+      });
     }
 
-    function updateHash(mode) {
-      history.pushState(null, '', '#' + mode);
+    function showLoading() {
+      document.getElementById('loadingOverlay').classList.add('active');
+    }
+
+    function hideLoading() {
+      document.getElementById('loadingOverlay').classList.remove('active');
+    }
+
+    // ========================================
+    // フィルタ初期化
+    // ========================================
+    function initGlobalYearMonth() {
+      const select = document.getElementById('globalYearMonth');
+      select.innerHTML = '';
+      
+      filterOptions.yearMonths.forEach(ym => {
+        const option = document.createElement('option');
+        option.value = ym;
+        option.textContent = formatYearMonthDisplay(ym);
+        select.appendChild(option);
+      });
+      
+      // 今月があれば選択、なければ最新
+      const now = new Date();
+      const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      if (filterOptions.yearMonths.includes(currentYM)) {
+        select.value = currentYM;
+        currentFilters.yearMonth = currentYM;
+      } else if (filterOptions.yearMonths.length > 0) {
+        select.value = filterOptions.yearMonths[0];
+        currentFilters.yearMonth = filterOptions.yearMonths[0];
+      }
+      
+      // CFモード用年月セレクトも初期化
+      initCFYearMonth();
+    }
+
+    function initCFYearMonth() {
+      const select = document.getElementById('cfYearMonth');
+      select.innerHTML = '';
+      
+      filterOptions.yearMonths.forEach(ym => {
+        const option = document.createElement('option');
+        option.value = ym;
+        option.textContent = formatYearMonthDisplay(ym);
+        select.appendChild(option);
+      });
+      
+      if (filterOptions.yearMonths.length > 0) {
+        select.value = currentFilters.yearMonth || filterOptions.yearMonths[0];
+      }
+    }
+
+    function initFilterOptions() {
+      // 日付範囲（1-31日）
+      const startDaySelect = document.getElementById('filterStartDay');
+      const endDaySelect = document.getElementById('filterEndDay');
+      
+      for (let i = 1; i <= 31; i++) {
+        startDaySelect.innerHTML += `<option value="${i}">${i}日</option>`;
+        endDaySelect.innerHTML += `<option value="${i}">${i}日</option>`;
+      }
+      
+      // ステータス
+      const statusSelect = document.getElementById('filterStatus');
+      filterOptions.status.forEach(s => {
+        statusSelect.innerHTML += `<option value="${s}">${s}</option>`;
+      });
+      
+      // 決済方法
+      const paymentSelect = document.getElementById('filterPayment');
+      filterOptions.payment.forEach(p => {
+        paymentSelect.innerHTML += `<option value="${p}">${p}</option>`;
+      });
+      
+      // メニュー
+      const menuSelect = document.getElementById('filterMenu');
+      filterOptions.menu.forEach(m => {
+        menuSelect.innerHTML += `<option value="${m}">${m}</option>`;
+      });
+    }
+
+    // ========================================
+    // イベントリスナー
+    // ========================================
+    function initEventListeners() {
+      // グローバル年月変更
+      document.getElementById('globalYearMonth').addEventListener('change', function() {
+        currentFilters.yearMonth = this.value;
+        loadReservations();
+        
+        // 分析モードの場合は分析データも更新
+        if (currentMode === 'analysis') {
+          loadAnalysisData();
+        }
+      });
+
+      // モードタブ
+      document.querySelectorAll('.mode-tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+          const mode = this.dataset.mode;
+          switchMode(mode);
+        });
+      });
+
+      // サブタブ（分析モード）
+      document.querySelectorAll('.sub-tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+          const sub = this.dataset.sub;
+          switchSubTab(sub);
+        });
+      });
+
+      // フィルタ変更
+      document.getElementById('filterStartDay').addEventListener('change', onFilterChange);
+      document.getElementById('filterEndDay').addEventListener('change', onFilterChange);
+      document.getElementById('filterStatus').addEventListener('change', onFilterChange);
+      document.getElementById('filterPayment').addEventListener('change', onFilterChange);
+      document.getElementById('filterMenu').addEventListener('change', onFilterChange);
+
+      // 検索
+      let searchTimeout;
+      document.getElementById('searchInput').addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+          currentFilters.search = this.value;
+          loadReservations();
+        }, 300);
+      });
+
+      // クイックフィルタ
+      document.querySelectorAll('.quick-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const status = this.dataset.status;
+          
+          // トグル
+          if (this.classList.contains('active')) {
+            this.classList.remove('active');
+            document.getElementById('filterStatus').value = 'all';
+            currentFilters.status = 'all';
+          } else {
+            document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            document.getElementById('filterStatus').value = status;
+            currentFilters.status = status;
+          }
+          
+          loadReservations();
+        });
+      });
+
+      // リセットボタン
+      document.getElementById('resetFilters').addEventListener('click', resetFilters);
+
+      // ブラウザバック対応
+      window.addEventListener('hashchange', function() {
+        const hash = window.location.hash.replace('#', '');
+        if (['accounting', 'analysis', 'cashflow'].includes(hash)) {
+          switchMode(hash, false);
+        }
+      });
+
+      // CFモード：経費入力変更時にリアルタイム計算
+      ['inputVariable', 'inputLabor', 'inputOtherFixed', 'inputDepreciation', 'inputLoanPayment', 'inputCapex'].forEach(id => {
+        document.getElementById(id).addEventListener('input', calculateCashFlow);
+      });
+
+      // CFモード：年月変更
+      document.getElementById('cfYearMonth').addEventListener('change', loadCFData);
+
+      // CFモード：保存ボタン
+      document.getElementById('cfSave').addEventListener('click', saveCFData);
+
+      // CFモード：前月コピー
+      document.getElementById('cfCopyPrev').addEventListener('click', copyPreviousMonth);
+    }
+
+    function onFilterChange() {
+      currentFilters.startDay = document.getElementById('filterStartDay').value;
+      currentFilters.endDay = document.getElementById('filterEndDay').value;
+      currentFilters.status = document.getElementById('filterStatus').value;
+      currentFilters.payment = document.getElementById('filterPayment').value;
+      currentFilters.menu = document.getElementById('filterMenu').value;
+      
+      // クイックフィルタの状態を更新
+      document.querySelectorAll('.quick-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.status === currentFilters.status);
+      });
+      
+      loadReservations();
+    }
+
+    function resetFilters() {
+      currentFilters.startDay = '';
+      currentFilters.endDay = '';
+      currentFilters.status = 'all';
+      currentFilters.payment = 'all';
+      currentFilters.menu = 'all';
+      currentFilters.search = '';
+      
+      document.getElementById('filterStartDay').value = '';
+      document.getElementById('filterEndDay').value = '';
+      document.getElementById('filterStatus').value = 'all';
+      document.getElementById('filterPayment').value = 'all';
+      document.getElementById('filterMenu').value = 'all';
+      document.getElementById('searchInput').value = '';
+      
+      document.querySelectorAll('.quick-btn').forEach(btn => btn.classList.remove('active'));
+      
+      loadReservations();
     }
 
     // ========================================
     // モード切替
     // ========================================
-    function switchMode(mode, updateUrl) {
-      if (updateUrl !== false) updateHash(mode);
+    function switchMode(mode, updateHash = true) {
+      currentMode = mode;
       
-      state.currentMode = mode;
-      
-      // タブ更新
-      document.querySelectorAll('.mode-tab').forEach(function(tab) {
+      // タブのアクティブ状態を更新
+      document.querySelectorAll('.mode-tab').forEach(tab => {
         tab.classList.toggle('active', tab.dataset.mode === mode);
       });
       
-      // コンテンツ更新
-      document.querySelectorAll('.mode-content').forEach(function(content) {
+      // コンテンツの表示切替
+      document.querySelectorAll('.mode-content').forEach(content => {
         content.classList.remove('active');
       });
-      document.getElementById(mode + 'Mode').classList.add('active');
       
-      // ヘッダーサマリー表示切替
-      var headerSummary = document.getElementById('headerSummary');
-      headerSummary.style.display = (mode === 'accounting') ? 'flex' : 'none';
-      
-      // モード別のデータ読み込み
-      if (mode === 'analysis') {
+      if (mode === 'accounting') {
+        document.getElementById('accountingMode').classList.add('active');
+      } else if (mode === 'analysis') {
+        document.getElementById('analysisMode').classList.add('active');
         loadAnalysisData();
       } else if (mode === 'cashflow') {
-        loadCashflowData();
+        document.getElementById('cashflowMode').classList.add('active');
+        loadCFData();
+      }
+      
+      // URLハッシュを更新
+      if (updateHash) {
+        window.location.hash = mode;
       }
     }
 
-    // ========================================
-    // サーバー通信
-    // ========================================
-    function callServer(functionName) {
-      var args = Array.prototype.slice.call(arguments, 1);
-      return new Promise(function(resolve, reject) {
-        var runner = google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(reject);
-        runner[functionName].apply(runner, args);
+    function switchSubTab(sub) {
+      currentSubTab = sub;
+      
+      // サブタブのアクティブ状態を更新
+      document.querySelectorAll('.sub-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.sub === sub);
       });
-    }
-
-    // ========================================
-    // フィルタオプション読み込み
-    // ========================================
-    function loadFilterOptions() {
-      callServer('getFilterOptions')
-        .then(function(options) {
-          state.filterOptions = options;
-          populateGlobalYearMonth(options.yearMonths);
-          populateFilters(options);
-          
-          // 初期値設定
-          if (options.yearMonths.length > 0) {
-            state.filters.yearMonth = options.yearMonths[0];
-          }
-          
-          // アプリ表示
-          document.getElementById('initLoading').style.display = 'none';
-          document.getElementById('app').classList.add('active');
-          
-          // データ読み込み
-          loadReservations();
-        })
-        .catch(function(error) {
-          showToast('読み込みエラー: ' + error.message, 'error');
-        });
-    }
-
-    function populateGlobalYearMonth(yearMonths) {
-      var sel = document.getElementById('globalYearMonth');
-      sel.innerHTML = '';
-      yearMonths.forEach(function(ym) {
-        var opt = document.createElement('option');
-        opt.value = ym;
-        opt.textContent = ym.replace('-', '年') + '月';
-        sel.appendChild(opt);
+      
+      // サブコンテンツの表示切替
+      document.querySelectorAll('.sub-content').forEach(content => {
+        content.classList.remove('active');
       });
+      document.getElementById(sub + 'Content').classList.add('active');
+      
+      // データをロード
+      loadSubTabData(sub);
     }
-
-    function populateFilters(opts) {
-      // 日付範囲
-      var startSel = document.getElementById('filterStartDay');
-      var endSel = document.getElementById('filterEndDay');
-      startSel.innerHTML = '<option value="0">1日〜</option>';
-      endSel.innerHTML = '<option value="0">〜末日</option>';
-      for (var d = 1; d <= 31; d++) {
-        var opt1 = document.createElement('option');
-        opt1.value = d;
-        opt1.textContent = d + '日〜';
-        startSel.appendChild(opt1);
+    // ========================================
+    // 経理モード：データ取得・表示
+    // ========================================
+    async function loadReservations() {
+      try {
+        showLoading();
         
-        var opt2 = document.createElement('option');
-        opt2.value = d;
-        opt2.textContent = '〜' + d + '日';
-        endSel.appendChild(opt2);
+        const result = await runGAS('getReservations', currentFilters);
+        reservations = result.reservations;
+        
+        renderReservations();
+        updateSummary(result.summary);
+        updateHeaderSummary(result.summary);
+        
+        hideLoading();
+      } catch (error) {
+        console.error('Load error:', error);
+        hideLoading();
+        alert('データ取得エラー: ' + error.message);
       }
-      
-      // 決済
-      var paySel = document.getElementById('filterPayment');
-      paySel.innerHTML = '<option value="all">すべて</option>';
-      opts.payment.forEach(function(p) {
-        var opt = document.createElement('option');
-        opt.value = p;
-        opt.textContent = p;
-        paySel.appendChild(opt);
-      });
-      
-      // メニュー
-      var menuSel = document.getElementById('filterMenu');
-      menuSel.innerHTML = '<option value="all">すべて</option>';
-      opts.menu.forEach(function(m) {
-        var opt = document.createElement('option');
-        opt.value = m;
-        opt.textContent = m;
-        menuSel.appendChild(opt);
-      });
-      
-      // 担当
-      var staffSel = document.getElementById('filterStaff');
-      staffSel.innerHTML = '<option value="all">すべて</option>';
-      opts.staff.forEach(function(s) {
-        var opt = document.createElement('option');
-        opt.value = s;
-        opt.textContent = s;
-        staffSel.appendChild(opt);
-      });
     }
 
-    // ========================================
-    // イベントリスナー設定
-    // ========================================
-    function setupEventListeners() {
-      // モード切替
-      document.querySelectorAll('.mode-tab').forEach(function(tab) {
-        tab.addEventListener('click', function() {
-          switchMode(tab.dataset.mode);
-        });
-      });
+    function renderReservations() {
+      const container = document.getElementById('reservationList');
       
-      // グローバル月選択
-      document.getElementById('globalYearMonth').addEventListener('change', function(e) {
-        state.filters.yearMonth = e.target.value;
-        loadReservations();
-        if (state.currentMode === 'analysis') {
-          loadAnalysisData();
-        } else if (state.currentMode === 'cashflow') {
-          loadCashflowData();
-        }
-      });
-      
-      // 経理モードフィルタ
-      document.getElementById('filterStartDay').addEventListener('change', onFilterChange);
-      document.getElementById('filterEndDay').addEventListener('change', onFilterChange);
-      document.getElementById('filterPayment').addEventListener('change', onFilterChange);
-      document.getElementById('filterMenu').addEventListener('change', onFilterChange);
-      document.getElementById('filterStaff').addEventListener('change', onFilterChange);
-      document.getElementById('filterSort').addEventListener('change', onFilterChange);
-      
-      document.getElementById('btnResetDate').addEventListener('click', function() {
-        document.getElementById('filterStartDay').value = '0';
-        document.getElementById('filterEndDay').value = '0';
-        state.filters.startDay = 0;
-        state.filters.endDay = 0;
-        loadReservations();
-      });
-      
-      var searchTimeout;
-      document.getElementById('searchInput').addEventListener('input', function(e) {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(function() {
-          state.filters.search = e.target.value;
-          loadReservations();
-        }, 300);
-      });
-      
-      document.querySelectorAll('.quick-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          document.querySelectorAll('.quick-btn').forEach(function(b) { b.classList.remove('active'); });
-          btn.classList.add('active');
-          state.filters.status = btn.dataset.status;
-          loadReservations();
-        });
-      });
-      
-      document.getElementById('btnSave').addEventListener('click', saveReservation);
-      document.getElementById('btnClose').addEventListener('click', closePanel);
-      
-      // 分析モード サブタブ
-      document.querySelectorAll('.sub-tab').forEach(function(tab) {
-        tab.addEventListener('click', function() {
-          document.querySelectorAll('.sub-tab').forEach(function(t) { t.classList.remove('active'); });
-          tab.classList.add('active');
-          
-          document.querySelectorAll('.sub-content').forEach(function(c) { c.classList.remove('active'); });
-          document.getElementById('sub' + capitalizeFirst(tab.dataset.sub)).classList.add('active');
-          
-          state.currentSubTab = tab.dataset.sub;
-        });
-      });
-      
-      // CFモード 入力
-      var cfInputs = ['cfVariable', 'cfLabor', 'cfOtherFixed', 'cfDepreciation', 'cfLoanPayment', 'cfCapex'];
-      cfInputs.forEach(function(id) {
-        document.getElementById(id).addEventListener('input', updateCashflowCalculation);
-      });
-      
-      document.getElementById('btnCopyPrev').addEventListener('click', copyPreviousMonth);
-      document.getElementById('btnSaveCF').addEventListener('click', saveCashflow);
-    }
-
-    function capitalizeFirst(str) {
-      return str.charAt(0).toUpperCase() + str.slice(1);
-    }
-
-    // ========================================
-    // 経理モード機能
-    // ========================================
-    function onFilterChange() {
-      state.filters.startDay = parseInt(document.getElementById('filterStartDay').value) || 0;
-      state.filters.endDay = parseInt(document.getElementById('filterEndDay').value) || 0;
-      state.filters.payment = document.getElementById('filterPayment').value;
-      state.filters.menu = document.getElementById('filterMenu').value;
-      state.filters.staff = document.getElementById('filterStaff').value;
-      
-      var sortVal = document.getElementById('filterSort').value.split('-');
-      state.filters.sortKey = sortVal[0];
-      state.filters.sortOrder = sortVal[1];
-      
-      loadReservations();
-    }
-
-    function loadReservations() {
-      var listEl = document.getElementById('reservationList');
-      listEl.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-      
-      callServer('getReservations', state.filters)
-        .then(function(result) {
-          state.reservations = result.reservations;
-          state.summary = result.summary;
-          renderList();
-          updateSummary();
-        })
-        .catch(function(error) {
-          listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>' + error.message + '</p></div>';
-        });
-    }
-
-    function renderList() {
-      var listEl = document.getElementById('reservationList');
-      
-      if (state.reservations.length === 0) {
-        listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>該当する予約がありません</p></div>';
+      if (reservations.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <p>該当する予約がありません</p>
+          </div>
+        `;
         return;
       }
       
-      var html = '';
-      state.reservations.forEach(function(r) {
-        var statusClass = r.status === '予約確定' ? 'confirmed' : 'completed';
-        var selected = r.rowIndex === state.selectedRowIndex ? 'selected' : '';
-        
-        html += '<div class="reservation-card ' + selected + '" data-row="' + r.rowIndex + '">' +
-          '<div class="card-row">' +
-            '<div class="card-main">' +
-              '<span class="card-date">' + r.date + '</span>' +
-              '<span class="card-time">' + r.start + '</span>' +
-              '<span class="card-patient">' + r.patient + '</span>' +
-            '</div>' +
-            '<span class="status-badge ' + statusClass + '">' + r.status + '</span>' +
-          '</div>' +
-          '<div class="card-row">' +
-            '<span class="card-menu">' + r.menu + '</span>' +
-            '<div class="card-main">' +
-              '<span class="card-payment">' + (r.payment || '-') + '</span>' +
-              '<span class="card-amount">¥' + r.amount.toLocaleString() + '</span>' +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      });
-      
-      listEl.innerHTML = html;
-      
-      listEl.querySelectorAll('.reservation-card').forEach(function(card) {
-        card.addEventListener('click', function() {
-          selectReservation(parseInt(card.dataset.row));
-        });
-      });
+      container.innerHTML = reservations.map(r => `
+        <div class="reservation-card" data-row="${r.rowIndex}" onclick="selectReservation(${r.rowIndex})">
+          <div class="card-row">
+            <div class="card-main">
+              <span class="card-date">${r.date}</span>
+              <span class="card-time">${r.start}</span>
+              <span class="card-patient">${r.patient}</span>
+            </div>
+            <span class="status-badge ${r.status === '完了' ? 'completed' : 'confirmed'}">${r.status}</span>
+          </div>
+          <div class="card-row">
+            <span class="card-menu">${r.menu}</span>
+            <div class="card-main">
+              <span class="card-amount">¥${r.amount.toLocaleString()}</span>
+              <span class="card-payment">${r.payment}</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
     }
 
-    function updateSummary() {
-      var s = state.summary;
-      document.getElementById('headerAmount').textContent = '¥' + s.totalAmount.toLocaleString();
-      document.getElementById('headerCount').textContent = s.totalCount + '件';
-      
-      var bp = s.byPayment;
-      document.getElementById('sumCash').textContent = '¥' + (bp['現金'] || 0).toLocaleString();
-      document.getElementById('sumCredit').textContent = '¥' + (bp['クレジット'] || 0).toLocaleString();
-      document.getElementById('sumTicket').textContent = '¥' + (bp['回数券'] || 0).toLocaleString();
-      document.getElementById('sumPaypay').textContent = '¥' + (bp['PayPay'] || 0).toLocaleString();
+    function updateSummary(summary) {
+      document.getElementById('summaryTotal').textContent = '¥' + summary.totalAmount.toLocaleString();
+      document.getElementById('summaryCash').textContent = '¥' + (summary.byPayment['現金'] || 0).toLocaleString();
+      document.getElementById('summaryCredit').textContent = '¥' + (summary.byPayment['クレジット'] || 0).toLocaleString();
+      document.getElementById('summaryTicket').textContent = '¥' + (summary.byPayment['回数券'] || 0).toLocaleString();
+      document.getElementById('summaryPaypay').textContent = '¥' + (summary.byPayment['PayPay'] || 0).toLocaleString();
+    }
+
+    function updateHeaderSummary(summary) {
+      document.getElementById('headerAmount').textContent = '¥' + summary.totalAmount.toLocaleString();
+      document.getElementById('headerCount').textContent = summary.totalCount + '件';
     }
 
     function selectReservation(rowIndex) {
-      var r = null;
-      for (var i = 0; i < state.reservations.length; i++) {
-        if (state.reservations[i].rowIndex === rowIndex) { r = state.reservations[i]; break; }
-      }
-      if (!r) return;
+      selectedReservation = reservations.find(r => r.rowIndex === rowIndex);
       
-      state.selectedRowIndex = rowIndex;
-      
-      document.querySelectorAll('.reservation-card').forEach(function(c) {
-        c.classList.toggle('selected', parseInt(c.dataset.row) === rowIndex);
+      // カードの選択状態を更新
+      document.querySelectorAll('.reservation-card').forEach(card => {
+        card.classList.toggle('selected', parseInt(card.dataset.row) === rowIndex);
       });
       
-      document.getElementById('panelEmpty').style.display = 'none';
-      var panel = document.getElementById('detailPanel');
-      panel.classList.remove('hidden');
-      
-      document.getElementById('rightColumn').classList.add('open');
-      
-      document.getElementById('panelTitle').textContent = r.patient + ' 様';
-      document.getElementById('panelSubtitle').textContent = r.date + ' ' + r.start;
-      document.getElementById('detailDate').textContent = r.date;
-      document.getElementById('detailTime').textContent = r.start + ' - ' + r.end;
-      document.getElementById('detailMenu').textContent = r.menu;
-      document.getElementById('detailStaff').textContent = r.staff;
-      
-      document.getElementById('editStatus').value = r.status;
-      document.getElementById('editAmount').value = r.amount;
-      document.getElementById('editPayment').value = r.payment || '';
-      document.getElementById('editMemo').value = r.memo || '';
+      // 詳細パネルを表示
+      renderDetailPanel();
     }
 
-    function closePanel() {
-      state.selectedRowIndex = null;
-      document.getElementById('panelEmpty').style.display = 'flex';
-      document.getElementById('detailPanel').classList.add('hidden');
-      document.getElementById('rightColumn').classList.remove('open');
-      document.querySelectorAll('.reservation-card').forEach(function(c) { c.classList.remove('selected'); });
-    }
-
-    function saveReservation() {
-      if (!state.selectedRowIndex) return;
+    function renderDetailPanel() {
+      const panel = document.getElementById('detailPanel');
+      const r = selectedReservation;
       
-      var btn = document.getElementById('btnSave');
-      btn.disabled = true;
-      btn.textContent = '保存中...';
-      
-      var updates = {
-        status: document.getElementById('editStatus').value,
-        amount: parseInt(document.getElementById('editAmount').value) || 0,
-        payment: document.getElementById('editPayment').value,
-        memo: document.getElementById('editMemo').value
-      };
-      
-      var savedRow = state.selectedRowIndex;
-      
-      callServer('updateReservation', savedRow, updates)
-        .then(function() {
-          showToast('保存しました！', 'success');
-          return loadReservations();
-        })
-        .then(function() {
-          selectReservation(savedRow);
-        })
-        .catch(function(error) {
-          showToast('エラー: ' + error.message, 'error');
-        })
-        .finally(function() {
-          btn.disabled = false;
-          btn.textContent = '保存する';
-        });
-    }
-
-    // ========================================
-    // 分析モード機能（プレースホルダー）
-    // ========================================
-    function loadAnalysisData() {
-      // TODO: Phase 2で実装
-      // 仮データを表示
-      document.getElementById('kpiSales').textContent = '¥850,000';
-      document.getElementById('kpiVisits').textContent = '95';
-      document.getElementById('kpiRepeat').textContent = '78.5%';
-      document.getElementById('kpiChurnWarning').textContent = '6';
-      document.getElementById('kpiChurnConfirmed').textContent = '7';
-      
-      // 仮のチャート描画
-      renderSalesChart();
-    }
-
-    function renderSalesChart() {
-      var ctx = document.getElementById('salesChart');
-      if (!ctx) return;
-      
-      if (state.charts.sales) {
-        state.charts.sales.destroy();
+      if (!r) {
+        panel.innerHTML = `
+          <div class="panel-empty">
+            <div class="panel-empty-icon">📋</div>
+            <p>予約を選択してください</p>
+          </div>
+        `;
+        return;
       }
       
-      state.charts.sales = new Chart(ctx, {
+      panel.innerHTML = `
+        <div class="detail-panel">
+          <div class="panel-header">
+            <div class="panel-title">${r.patient}</div>
+            <div class="panel-subtitle">${r.date} ${r.start} - ${r.end}</div>
+          </div>
+          <div class="panel-content">
+            <div class="detail-section">
+              <div class="section-title">予約情報</div>
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <span class="detail-label">メニュー</span>
+                  <span class="detail-value">${r.menu}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">担当</span>
+                  <span class="detail-value">${r.staff || '-'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">レーン</span>
+                  <span class="detail-value">${r.lane || '-'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">ID</span>
+                  <span class="detail-value">${r.id || '-'}</span>
+                </div>
+              </div>
+            </div>
+            <div class="detail-section">
+              <div class="section-title">編集</div>
+              <div class="form-group">
+                <label class="form-label">金額</label>
+                <input type="number" class="form-input" id="editAmount" value="${r.amount}">
+              </div>
+              <div class="form-group">
+                <label class="form-label">ステータス</label>
+                <select class="form-select" id="editStatus">
+                  <option value="確定" ${r.status === '確定' ? 'selected' : ''}>確定</option>
+                  <option value="完了" ${r.status === '完了' ? 'selected' : ''}>完了</option>
+                  <option value="キャンセル" ${r.status === 'キャンセル' ? 'selected' : ''}>キャンセル</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">決済方法</label>
+                <select class="form-select" id="editPayment">
+                  <option value="現金" ${r.payment === '現金' ? 'selected' : ''}>現金</option>
+                  <option value="クレジット" ${r.payment === 'クレジット' ? 'selected' : ''}>クレジット</option>
+                  <option value="回数券" ${r.payment === '回数券' ? 'selected' : ''}>回数券</option>
+                  <option value="PayPay" ${r.payment === 'PayPay' ? 'selected' : ''}>PayPay</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">メモ</label>
+                <textarea class="form-textarea" id="editMemo">${r.memo || ''}</textarea>
+              </div>
+            </div>
+          </div>
+          <div class="panel-footer">
+            <button class="btn btn-secondary" onclick="cancelEdit()">キャンセル</button>
+            <button class="btn btn-primary" onclick="saveReservation()">保存</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function cancelEdit() {
+      renderDetailPanel();
+    }
+
+    async function saveReservation() {
+      if (!selectedReservation) return;
+      
+      try {
+        showLoading();
+        
+        const updates = {
+          amount: parseInt(document.getElementById('editAmount').value) || 0,
+          status: document.getElementById('editStatus').value,
+          payment: document.getElementById('editPayment').value,
+          memo: document.getElementById('editMemo').value
+        };
+        
+        await runGAS('updateReservation', selectedReservation.rowIndex, updates);
+        
+        // ローカルデータを更新
+        selectedReservation.amount = updates.amount;
+        selectedReservation.status = updates.status;
+        selectedReservation.payment = updates.payment;
+        selectedReservation.memo = updates.memo;
+        
+        // 再描画
+        renderReservations();
+        renderDetailPanel();
+        
+        // 選択状態を維持
+        document.querySelector(`.reservation-card[data-row="${selectedReservation.rowIndex}"]`)?.classList.add('selected');
+        
+        // 集計を再計算
+        await loadReservations();
+        
+        hideLoading();
+      } catch (error) {
+        console.error('Save error:', error);
+        hideLoading();
+        alert('保存エラー: ' + error.message);
+      }
+    }
+
+    // ========================================
+    // 分析モード：データ取得・表示
+    // ========================================
+    async function loadAnalysisData() {
+      try {
+        showLoading();
+        
+        const yearMonth = currentFilters.yearMonth;
+        
+        // ダッシュボードデータを取得
+        const summary = await runGAS('getAnalysisSummary', yearMonth);
+        renderKPIs(summary);
+        
+        // 売上トレンドを取得
+        const trend = await runGAS('getSalesTrend', 12);
+        renderSalesChart(trend);
+        
+        // 離反リストを取得
+        const churnList = await runGAS('getChurnList');
+        renderChurnTable(churnList);
+        
+        hideLoading();
+      } catch (error) {
+        console.error('Analysis load error:', error);
+        hideLoading();
+      }
+    }
+
+    async function loadSubTabData(sub) {
+      try {
+        showLoading();
+        const yearMonth = currentFilters.yearMonth;
+        
+        if (sub === 'customers') {
+          const data = await runGAS('getCustomerAnalysis', yearMonth);
+          renderCustomerAnalysis(data);
+        } else if (sub === 'sales') {
+          const trend = await runGAS('getSalesTrend', 12);
+          renderSalesTrendCharts(trend);
+        } else if (sub === 'menu') {
+          const data = await runGAS('getMenuAnalysis', yearMonth);
+          renderMenuAnalysis(data);
+        }
+        
+        hideLoading();
+      } catch (error) {
+        console.error('Sub tab load error:', error);
+        hideLoading();
+      }
+    }
+
+    function renderKPIs(summary) {
+      const grid = document.getElementById('kpiGrid');
+      
+      const salesChange = summary.comparison.salesRate;
+      const salesChangeClass = salesChange >= 0 ? 'positive' : 'negative';
+      const salesChangeIcon = salesChange >= 0 ? '↑' : '↓';
+      
+      grid.innerHTML = `
+        <div class="kpi-card">
+          <div class="kpi-label">今月売上</div>
+          <div class="kpi-value">¥${summary.currentMonth.sales.toLocaleString()}</div>
+          <div class="kpi-sub">
+            前月比
+            <span class="kpi-change ${salesChangeClass}">${salesChangeIcon} ${Math.abs(salesChange).toFixed(1)}%</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">来院数</div>
+          <div class="kpi-value">${summary.currentMonth.count}件</div>
+          <div class="kpi-sub">${summary.currentMonth.uniquePatients}名</div>
+        </div>
+        <div class="kpi-card success">
+          <div class="kpi-label">リピート率</div>
+          <div class="kpi-value">${summary.repeatRate}%</div>
+          <div class="kpi-sub">今月来院者のうち</div>
+        </div>
+        <div class="kpi-card warning">
+          <div class="kpi-label">離反予備軍</div>
+          <div class="kpi-value">${summary.churnWarning}名</div>
+          <div class="kpi-sub">90-180日未来院</div>
+        </div>
+        <div class="kpi-card danger">
+          <div class="kpi-label">離反確定</div>
+          <div class="kpi-value">${summary.churnConfirmed}名</div>
+          <div class="kpi-sub">180日以上未来院</div>
+        </div>
+      `;
+    }
+
+    function renderSalesChart(trend) {
+      const ctx = document.getElementById('salesChart').getContext('2d');
+      
+      if (salesChart) {
+        salesChart.destroy();
+      }
+      
+      const labels = trend.map(t => formatYearMonthDisplay(t.yearMonth));
+      const salesData = trend.map(t => t.sales);
+      
+      salesChart = new Chart(ctx, {
         type: 'bar',
         data: {
-          labels: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
+          labels: labels,
           datasets: [{
             label: '売上',
-            data: [720000, 680000, 750000, 820000, 790000, 680000, 710000, 690000, 650000, 890000, 780000, 850000],
+            data: salesData,
             backgroundColor: 'rgba(26, 145, 120, 0.7)',
-            borderColor: 'rgba(26, 145, 120, 1)',
+            borderColor: '#1A9178',
             borderWidth: 1,
             borderRadius: 4
           }]
@@ -2278,7 +2265,7 @@
               beginAtZero: true,
               ticks: {
                 callback: function(value) {
-                  return '¥' + (value / 10000) + '万';
+                  return '¥' + (value / 10000).toFixed(0) + '万';
                 }
               }
             }
@@ -2287,76 +2274,352 @@
       });
     }
 
-    // ========================================
-    // CFモード機能（プレースホルダー）
-    // ========================================
-    function loadCashflowData() {
-      // TODO: Phase 3で実装
-      // 仮データを表示
-      state.cfData.sales = state.summary.totalAmount || 850000;
-      document.getElementById('cfSales').value = '¥' + state.cfData.sales.toLocaleString();
-      updateCashflowCalculation();
+    function renderChurnTable(churnList) {
+      const tbody = document.getElementById('churnTableBody');
+      
+      if (churnList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">離反リスクのある顧客はいません 🎉</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = churnList.map(c => `
+        <tr>
+          <td><span class="status-dot ${c.status}"></span>${c.status === 'churned' ? '離反確定' : '予備軍'}</td>
+          <td>${c.patientName}</td>
+          <td>${c.lastVisit}</td>
+          <td>${c.daysSinceVisit}日</td>
+          <td>${c.totalVisits}回</td>
+          <td>¥${c.totalAmount.toLocaleString()}</td>
+        </tr>
+      `).join('');
     }
 
-    function updateCashflowCalculation() {
-      var sales = state.cfData.sales;
-      var variable = parseInt(document.getElementById('cfVariable').value) || 0;
-      var labor = parseInt(document.getElementById('cfLabor').value) || 0;
-      var otherFixed = parseInt(document.getElementById('cfOtherFixed').value) || 0;
-      var depreciation = parseInt(document.getElementById('cfDepreciation').value) || 0;
-      var loanPayment = parseInt(document.getElementById('cfLoanPayment').value) || 0;
-      var capex = parseInt(document.getElementById('cfCapex').value) || 0;
+    function renderCustomerAnalysis(data) {
+      document.getElementById('totalPatients').textContent = data.totalPatients + '名';
+      document.getElementById('avgVisits').textContent = data.averageVisits + '回';
+      
+      // 来院回数分布グラフ
+      const ctx = document.getElementById('visitDistChart').getContext('2d');
+      
+      if (visitDistChart) {
+        visitDistChart.destroy();
+      }
+      
+      const labels = Object.keys(data.visitDistribution);
+      const values = Object.values(data.visitDistribution);
+      
+      visitDistChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: values,
+            backgroundColor: [
+              '#fee2e2',
+              '#fef3c7',
+              '#dcfce7',
+              '#dbeafe',
+              '#e0e7ff'
+            ],
+            borderColor: [
+              '#dc2626',
+              '#eab308',
+              '#16a34a',
+              '#2563eb',
+              '#4f46e5'
+            ],
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right'
+            }
+          }
+        }
+      });
+    }
+
+    function renderSalesTrendCharts(trend) {
+      // 売上推移
+      const ctx1 = document.getElementById('salesTrendChart').getContext('2d');
+      
+      if (salesTrendChart) {
+        salesTrendChart.destroy();
+      }
+      
+      const labels = trend.map(t => formatYearMonthDisplay(t.yearMonth));
+      const salesData = trend.map(t => t.sales);
+      
+      salesTrendChart = new Chart(ctx1, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '売上',
+            data: salesData,
+            borderColor: '#1A9178',
+            backgroundColor: 'rgba(26, 145, 120, 0.1)',
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return '¥' + (value / 10000).toFixed(0) + '万';
+                }
+              }
+            }
+          }
+        }
+      });
+      
+      // 来院数推移
+      const ctx2 = document.getElementById('countTrendChart').getContext('2d');
+      
+      if (countTrendChart) {
+        countTrendChart.destroy();
+      }
+      
+      const countData = trend.map(t => t.count);
+      
+      countTrendChart = new Chart(ctx2, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '来院数',
+            data: countData,
+            borderColor: '#2563eb',
+            backgroundColor: 'rgba(37, 99, 235, 0.1)',
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    function renderMenuAnalysis(data) {
+      document.getElementById('menuCount').textContent = data.byMenu.length + '種類';
+      document.getElementById('menuTotalSales').textContent = '¥' + data.totalSales.toLocaleString();
+      
+      // 円グラフ
+      const ctx = document.getElementById('menuPieChart').getContext('2d');
+      
+      if (menuPieChart) {
+        menuPieChart.destroy();
+      }
+      
+      const labels = data.byMenu.slice(0, 8).map(m => m.menu);
+      const values = data.byMenu.slice(0, 8).map(m => m.amount);
+      
+      const colors = [
+        '#1A9178', '#2563eb', '#eab308', '#dc2626', 
+        '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'
+      ];
+      
+      menuPieChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: values,
+            backgroundColor: colors.slice(0, labels.length),
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right'
+            }
+          }
+        }
+      });
+      
+      // テーブル
+      const tbody = document.getElementById('menuTableBody');
+      tbody.innerHTML = data.byMenu.map(m => `
+        <tr>
+          <td>${m.menu}</td>
+          <td>${m.count}件</td>
+          <td>¥${m.amount.toLocaleString()}</td>
+          <td>${m.percentage}%</td>
+        </tr>
+      `).join('');
+    }
+
+    // ========================================
+    // CFモード：データ取得・計算・保存
+    // ========================================
+    async function loadCFData() {
+      try {
+        showLoading();
+        
+        const yearMonth = document.getElementById('cfYearMonth').value;
+        
+        // 売上を取得
+        const sales = await runGAS('getMonthlySales', yearMonth);
+        document.getElementById('inputSales').value = '¥' + sales.toLocaleString();
+        document.getElementById('inputSales').dataset.value = sales;
+        
+        // 経費データを取得（あれば）
+        const expenses = await runGAS('getExpenses', yearMonth);
+        
+        if (expenses) {
+          document.getElementById('inputVariable').value = expenses.variable || 0;
+          document.getElementById('inputLabor').value = expenses.labor || 0;
+          document.getElementById('inputOtherFixed').value = expenses.otherFixed || 0;
+          document.getElementById('inputDepreciation').value = expenses.depreciation || 0;
+          document.getElementById('inputLoanPayment').value = expenses.loanPayment || 0;
+          document.getElementById('inputCapex').value = expenses.capex || 0;
+        } else {
+          // リセット
+          document.getElementById('inputVariable').value = 0;
+          document.getElementById('inputLabor').value = 0;
+          document.getElementById('inputOtherFixed').value = 0;
+          document.getElementById('inputDepreciation').value = 0;
+          document.getElementById('inputLoanPayment').value = 0;
+          document.getElementById('inputCapex').value = 0;
+        }
+        
+        calculateCashFlow();
+        
+        hideLoading();
+      } catch (error) {
+        console.error('CF load error:', error);
+        hideLoading();
+      }
+    }
+
+    function calculateCashFlow() {
+      const sales = parseInt(document.getElementById('inputSales').dataset.value) || 0;
+      const variable = parseInt(document.getElementById('inputVariable').value) || 0;
+      const labor = parseInt(document.getElementById('inputLabor').value) || 0;
+      const otherFixed = parseInt(document.getElementById('inputOtherFixed').value) || 0;
+      const depreciation = parseInt(document.getElementById('inputDepreciation').value) || 0;
+      const loanPayment = parseInt(document.getElementById('inputLoanPayment').value) || 0;
+      const capex = parseInt(document.getElementById('inputCapex').value) || 0;
       
       // 計算
-      var gross = sales - variable;
-      var grossRate = sales > 0 ? (gross / sales * 100).toFixed(1) : 0;
-      var fixedCost = labor + otherFixed;
-      var laborRate = gross > 0 ? (labor / gross * 100).toFixed(1) : 0;
-      var profit = gross - fixedCost;
-      var tax = profit > 0 ? Math.floor(profit * 0.3) : 0;
-      var afterTax = profit - tax;
-      var carryover = afterTax + depreciation - loanPayment - capex;
+      const gross = sales - variable;
+      const grossRate = sales > 0 ? (gross / sales * 100) : 0;
+      const variableRate = sales > 0 ? (variable / sales * 100) : 0;
+      const fixedTotal = labor + otherFixed;
+      const profit = gross - fixedTotal;
+      const laborRate = gross > 0 ? (labor / gross * 100) : 0;
+      const taxRate = 0.30;
+      const tax = profit > 0 ? profit * taxRate : 0;
+      const afterTax = profit - tax;
+      const carryover = afterTax + depreciation - loanPayment - capex;
       
       // ブロックパズル更新
-      document.getElementById('bpSales').textContent = '¥' + sales.toLocaleString();
-      document.getElementById('bpVariable').textContent = '¥' + variable.toLocaleString();
-      document.getElementById('bpGross').textContent = '¥' + gross.toLocaleString();
-      document.getElementById('bpGrossRate').textContent = '粗利率 ' + grossRate + '%';
-      document.getElementById('bpLabor').textContent = '¥' + labor.toLocaleString();
-      document.getElementById('bpLaborRate').textContent = '労働分配率 ' + laborRate + '%';
-      document.getElementById('bpOtherFixed').textContent = '¥' + otherFixed.toLocaleString();
-      document.getElementById('bpProfit').textContent = '¥' + profit.toLocaleString();
+      document.getElementById('blockSales').textContent = '¥' + sales.toLocaleString();
+      document.getElementById('blockVariable').textContent = '¥' + variable.toLocaleString();
+      document.getElementById('blockVariableRate').textContent = variableRate.toFixed(1) + '%';
+      document.getElementById('blockGross').textContent = '¥' + gross.toLocaleString();
+      document.getElementById('blockGrossRate').textContent = '粗利率 ' + grossRate.toFixed(1) + '%';
+      document.getElementById('blockLabor').textContent = '¥' + labor.toLocaleString();
+      document.getElementById('blockLaborRate').textContent = '労働分配率 ' + laborRate.toFixed(1) + '%';
+      document.getElementById('blockOtherFixed').textContent = '¥' + otherFixed.toLocaleString();
+      document.getElementById('blockProfit').textContent = '¥' + profit.toLocaleString();
       
       // 結果更新
-      document.getElementById('cfGross').textContent = '¥' + gross.toLocaleString();
-      document.getElementById('cfProfit').textContent = '¥' + profit.toLocaleString();
-      document.getElementById('cfProfit').className = 'result-value ' + (profit >= 0 ? 'positive' : 'negative');
-      document.getElementById('cfAfterTax').textContent = '¥' + afterTax.toLocaleString();
-      document.getElementById('cfCarryover').textContent = '¥' + carryover.toLocaleString();
-      document.getElementById('cfCarryover').className = 'result-value ' + (carryover >= 0 ? 'positive' : 'negative');
+      document.getElementById('resultGross').textContent = '¥' + gross.toLocaleString();
+      document.getElementById('resultProfit').textContent = '¥' + profit.toLocaleString();
+      document.getElementById('resultProfit').className = 'result-value ' + (profit >= 0 ? 'positive' : 'negative');
+      document.getElementById('resultAfterTax').textContent = '¥' + Math.round(afterTax).toLocaleString();
+      document.getElementById('resultCarryover').textContent = '¥' + Math.round(carryover).toLocaleString();
+      document.getElementById('resultCarryover').className = 'result-value ' + (carryover >= 0 ? 'positive' : 'negative');
     }
 
-    function copyPreviousMonth() {
-      // TODO: Phase 3で実装
-      showToast('前月データをコピーしました', 'success');
+    async function saveCFData() {
+      try {
+        showLoading();
+        
+        const yearMonth = document.getElementById('cfYearMonth').value;
+        const data = {
+          variable: parseInt(document.getElementById('inputVariable').value) || 0,
+          labor: parseInt(document.getElementById('inputLabor').value) || 0,
+          otherFixed: parseInt(document.getElementById('inputOtherFixed').value) || 0,
+          depreciation: parseInt(document.getElementById('inputDepreciation').value) || 0,
+          loanPayment: parseInt(document.getElementById('inputLoanPayment').value) || 0,
+          capex: parseInt(document.getElementById('inputCapex').value) || 0
+        };
+        
+        await runGAS('saveExpenses', yearMonth, data);
+        
+        hideLoading();
+        alert('保存しました');
+      } catch (error) {
+        console.error('Save CF error:', error);
+        hideLoading();
+        alert('保存エラー: ' + error.message);
+      }
     }
 
-    function saveCashflow() {
-      // TODO: Phase 3で実装
-      showToast('保存しました！', 'success');
+    async function copyPreviousMonth() {
+      try {
+        const currentYM = document.getElementById('cfYearMonth').value;
+        const parts = currentYM.split('-');
+        const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 2, 1);
+        const prevYM = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        
+        showLoading();
+        const prevExpenses = await runGAS('getExpenses', prevYM);
+        hideLoading();
+        
+        if (prevExpenses) {
+          document.getElementById('inputVariable').value = prevExpenses.variable || 0;
+          document.getElementById('inputLabor').value = prevExpenses.labor || 0;
+          document.getElementById('inputOtherFixed').value = prevExpenses.otherFixed || 0;
+          document.getElementById('inputDepreciation').value = prevExpenses.depreciation || 0;
+          document.getElementById('inputLoanPayment').value = prevExpenses.loanPayment || 0;
+          document.getElementById('inputCapex').value = prevExpenses.capex || 0;
+          calculateCashFlow();
+        } else {
+          alert('前月のデータがありません');
+        }
+      } catch (error) {
+        console.error('Copy prev error:', error);
+        hideLoading();
+      }
     }
 
     // ========================================
     // ユーティリティ
     // ========================================
-    function showToast(message, type) {
-      var toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.className = 'toast ' + (type || '');
-      toast.classList.add('show');
-      setTimeout(function() { toast.classList.remove('show'); }, 3000);
+    function formatYearMonthDisplay(ym) {
+      const parts = ym.split('-');
+      return parts[0] + '年' + parseInt(parts[1]) + '月';
     }
   </script>
-
 </body>
 </html>
