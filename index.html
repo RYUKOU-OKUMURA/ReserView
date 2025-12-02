@@ -2156,18 +2156,11 @@
         showLoading();
         
         const yearMonth = currentFilters.yearMonth;
+        const bundle = await runGAS('getAnalysisBundle', yearMonth);
         
-        // ダッシュボードデータを取得
-        const summary = await runGAS('getAnalysisSummary', yearMonth);
-        renderKPIs(summary);
-        
-        // 売上トレンドを取得
-        const trend = await runGAS('getSalesTrend', 12);
-        renderSalesChart(trend);
-        
-        // 離反リストを取得
-        const churnList = await runGAS('getChurnList');
-        renderChurnTable(churnList);
+        renderKPIs(bundle.summary);
+        renderSalesChart(bundle.trend);
+        renderChurnTable(bundle.churnList);
         
         hideLoading();
       } catch (error) {
