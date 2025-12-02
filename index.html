@@ -1643,6 +1643,7 @@
       menu: {}        // { [ym]: menuAnalysis }
     };
     const annualSalesCache = {}; // { [year]: total }
+    const monthlySalesCache = {}; // { [ym]: total }
 
     // ========================================
     // 初期化
@@ -2554,8 +2555,12 @@
           document.getElementById('cfYearMonth').value = yearMonth;
         }
         
-        // 売上を取得
-        const sales = await runGAS('getMonthlySales', yearMonth);
+        // 売上を取得（キャッシュ優先）
+        let sales = monthlySalesCache[yearMonth];
+        if (sales === undefined) {
+          sales = await runGAS('getMonthlySales', yearMonth);
+          monthlySalesCache[yearMonth] = sales;
+        }
         document.getElementById('inputSales').value = '¥' + sales.toLocaleString();
         document.getElementById('inputSales').dataset.value = sales;
         

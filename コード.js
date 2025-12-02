@@ -1333,6 +1333,16 @@ function getCashFlowHistory(months) {
  */
 function getMonthlySales(yearMonth) {
   try {
+    var cache = CacheService.getScriptCache();
+    var cacheKey = ['monthlySales', yearMonth].join(':');
+    var cached = cache.get(cacheKey);
+    if (cached) {
+      var cachedNum = parseInt(cached, 10);
+      if (!isNaN(cachedNum)) {
+        return cachedNum;
+      }
+    }
+    
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = ss.getSheetByName(SHEET_NAME);
     
@@ -1356,6 +1366,7 @@ function getMonthlySales(yearMonth) {
       }
     }
     
+    cache.put(cacheKey, String(totalSales), 300); // 5分キャッシュ
     return totalSales;
     
   } catch (error) {
