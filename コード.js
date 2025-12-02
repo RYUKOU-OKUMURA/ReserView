@@ -30,6 +30,20 @@ function doGet() {
 // ========================================
 
 /**
+ * シートから実データ範囲のみ取得
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @return {Array} 2次元配列
+ */
+function getSheetValues_(sheet) {
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) {
+    return [];
+  }
+  return sheet.getRange(1, 1, lastRow, lastCol).getValues();
+}
+
+/**
  * シートのヘッダーインデックスを取得
  */
 function getColumnIndexes_(headers) {
@@ -166,7 +180,10 @@ function getPreviousMonth_(yearMonth) {
 function getFilterOptions() {
   try {
     var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-    var data = sheet.getDataRange().getValues();
+    var data = getSheetValues_(sheet);
+    if (data.length === 0) {
+      return { staff: [], menu: [], payment: [], status: [], yearMonths: [] };
+    }
     var headers = data[0];
     var col = getColumnIndexes_(headers);
     
@@ -214,7 +231,7 @@ function getReservations(filters) {
       throw new Error('シートが見つかりません: ' + SHEET_NAME);
     }
     
-    var data = sheet.getDataRange().getValues();
+    var data = getSheetValues_(sheet);
     if (data.length < 2) {
       return { reservations: [], summary: createEmptySummary_() };
     }
@@ -504,13 +521,29 @@ function getAnalysisBundle(yearMonth, months) {
       throw new Error('シートが見つかりません: ' + PATIENTS_SHEET);
     }
     
-    var resData = reservationsSheet.getDataRange().getValues();
+    var resData = getSheetValues_(reservationsSheet);
+    var patData = getSheetValues_(patientsSheet);
+    
+    if (resData.length < 1) {
+      return {
+        summary: {
+          currentMonth: { sales: 0, count: 0, uniquePatients: 0 },
+          previousMonth: { sales: 0, count: 0, uniquePatients: 0 },
+          comparison: { salesDiff: 0, salesRate: 0, countDiff: 0, countRate: 0 },
+          repeatRate: 0,
+          churnWarning: 0,
+          churnConfirmed: 0
+        },
+        trend: [],
+        churnList: []
+      };
+    }
+    
     var resHeaders = resData[0];
     var resCol = getColumnIndexes_(resHeaders);
     
-    var patData = patientsSheet.getDataRange().getValues();
-    var patHeaders = patData[0];
-    var patCol = getPatientColumnIndexes_(patHeaders);
+    var patHeaders = patData[0] || [];
+    var patCol = patHeaders.length ? getPatientColumnIndexes_(patHeaders) : {};
     
     var prevMonth = getPreviousMonth_(yearMonth);
     var currentMonthData = { sales: 0, count: 0, patients: {} };
@@ -695,14 +728,24 @@ function getAnalysisSummary(yearMonth) {
     var patientsSheet = ss.getSheetByName(PATIENTS_SHEET);
     
     // 予約データを取得
-    var resData = reservationsSheet.getDataRange().getValues();
+    var resData = getSheetValues_(reservationsSheet);
+    if (resData.length < 1) {
+      return {
+        currentMonth: { sales: 0, count: 0, uniquePatients: 0 },
+        previousMonth: { sales: 0, count: 0, uniquePatients: 0 },
+        comparison: { salesDiff: 0, salesRate: 0, countDiff: 0, countRate: 0 },
+        repeatRate: 0,
+        churnWarning: 0,
+        churnConfirmed: 0
+      };
+    }
     var resHeaders = resData[0];
     var resCol = getColumnIndexes_(resHeaders);
     
     // 患者データを取得
-    var patData = patientsSheet.getDataRange().getValues();
-    var patHeaders = patData[0];
-    var patCol = getPatientColumnIndexes_(patHeaders);
+    var patData = getSheetValues_(patientsSheet);
+    var patHeaders = patData[0] || [];
+    var patCol = patHeaders.length ? getPatientColumnIndexes_(patHeaders) : {};
     
     // 対象年月がなければ今月を使用
     if (!yearMonth) {
@@ -838,7 +881,20 @@ function getCustomerAnalysis(yearMonth) {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var patientsSheet = ss.getSheetByName(PATIENTS_SHEET);
     
-    var data = patientsSheet.getDataRange().getValues();
+    var data = getSheetValues_(patientsSheet);
+    if (data.length < 1) {
+      return {
+        visitDistribution: {
+          '1回': 0,
+          '2-5回': 0,
+          '6-10回': 0,
+          '11-20回': 0,
+          '21回以上': 0
+        },
+        totalPatients: 0,
+        averageVisits: 0
+      };
+    }
     var headers = data[0];
     var col = getPatientColumnIndexes_(headers);
     
@@ -904,7 +960,10 @@ function getChurnList(baseDate) {
       return [];
     }
     
-    var data = patientsSheet.getDataRange().getValues();
+    var data = getSheetValues_(patientsSheet);
+    if (data.length < 1) {
+      return [];
+    }
     var headers = data[0];
     var col = getPatientColumnIndexes_(headers);
     
@@ -956,7 +1015,10 @@ function getSalesTrend(months) {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = ss.getSheetByName(SHEET_NAME);
     
-    var data = sheet.getDataRange().getValues();
+    var data = getSheetValues_(sheet);
+    if (data.length < 1) {
+      return [];
+    }
     var headers = data[0];
     var col = getColumnIndexes_(headers);
     
@@ -1029,7 +1091,10 @@ function getMenuAnalysis(yearMonth) {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = ss.getSheetByName(SHEET_NAME);
     
-    var data = sheet.getDataRange().getValues();
+    var data = getSheetValues_(sheet);
+    if (data.length < 1) {
+      return { byMenu: [], totalSales: 0, totalCount: 0 };
+    }
     var headers = data[0];
     var col = getColumnIndexes_(headers);
     
@@ -1114,7 +1179,10 @@ function getExpenses(yearMonth) {
       return null;
     }
     
-    var data = sheet.getDataRange().getValues();
+    var data = getSheetValues_(sheet);
+    if (data.length < 2) {
+      return null;
+    }
     var headers = data[0];
     
     for (var i = 1; i < data.length; i++) {
@@ -1157,7 +1225,7 @@ function saveExpenses(yearMonth, data) {
       sheet.appendRow(['年月', '変動費', '人件費', 'その他固定費', '減価償却費', '借入返済', '設備投資', '更新日時', '更新者']);
     }
     
-    var existingData = sheet.getDataRange().getValues();
+    var existingData = getSheetValues_(sheet);
     var rowIndex = -1;
     
     // 既存データを検索
@@ -1217,7 +1285,10 @@ function getMonthlySales(yearMonth) {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = ss.getSheetByName(SHEET_NAME);
     
-    var data = sheet.getDataRange().getValues();
+    var data = getSheetValues_(sheet);
+    if (data.length < 1) {
+      return 0;
+    }
     var headers = data[0];
     var col = getColumnIndexes_(headers);
     
