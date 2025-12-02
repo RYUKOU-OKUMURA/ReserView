@@ -157,6 +157,15 @@
       color: var(--text-muted);
     }
 
+    .header-annual {
+      font-size: 13px;
+      color: var(--text-light);
+      background: var(--bg);
+      padding: 4px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
     .header-amount {
       font-family: 'DM Sans', sans-serif;
       font-weight: 700;
@@ -1262,23 +1271,24 @@
   <!-- メインアプリ -->
   <div class="app" id="app">
     <!-- ヘッダー -->
-    <header class="header">
-      <div class="header-left">
-        <div class="logo">
-          <span class="logo-icon">📊</span>
-          経営みえる化くん
-        </div>
-        <div class="header-month">
-          <select id="globalYearMonth"></select>
-        </div>
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">
+        <span class="logo-icon">📊</span>
+        経営みえる化くん
       </div>
-      <div class="header-right">
-        <div class="header-summary">
-          <span class="header-amount" id="headerAmount">¥0</span>
-          <span class="header-count" id="headerCount">0件</span>
-        </div>
+      <div class="header-month">
+        <select id="globalYearMonth"></select>
       </div>
-    </header>
+    </div>
+    <div class="header-right">
+      <div class="header-summary">
+        <span class="header-annual" id="headerAnnual">年累計 ¥0</span>
+        <span class="header-amount" id="headerAmount">¥0</span>
+        <span class="header-count" id="headerCount">0件</span>
+      </div>
+    </div>
+  </header>
 
     <!-- モード切替タブ -->
     <nav class="mode-tabs">
@@ -1625,6 +1635,14 @@
     let salesTrendChart = null;
     let countTrendChart = null;
     let menuPieChart = null;
+    // フロント側キャッシュ
+    const analysisCache = {}; // { [ym]: { bundle } }
+    const analysisSubCache = {
+      sales: {},      // { [ym]: trend }
+      customers: {},  // { [ym]: customerAnalysis }
+      menu: {}        // { [ym]: menuAnalysis }
+    };
+    const annualSalesCache = {}; // { [year]: total }
 
     // ========================================
     // 初期化
@@ -1764,19 +1782,23 @@
     // ========================================
     function initEventListeners() {
       // グローバル年月変更
-      document.getElementById('globalYearMonth').addEventListener('change', function() {
+      document.getElementById('globalYearMonth').addEventListener('change', async function() {
         const ym = this.value;
         currentFilters.yearMonth = ym;
         syncCFYearMonth(ym);
-        loadReservations();
+        loadAnnualSalesHeader();
+        await loadReservations();
         
         // 分析モードの場合は分析データも更新
         if (currentMode === 'analysis') {
-          loadAnalysisData();
+          await loadAnalysisData();
+          if (currentSubTab !== 'dashboard') {
+            await loadSubTabData(currentSubTab);
+          }
         }
         // CFモードの場合はCFデータも更新
         if (currentMode === 'cashflow') {
-          loadCFData();
+          await loadCFData();
         }
       });
 
@@ -1858,6 +1880,9 @@
 
       // CFモード：前月コピー
       document.getElementById('cfCopyPrev').addEventListener('click', copyPreviousMonth);
+      
+      // 初回年累計読み込み
+      loadAnnualSalesHeader();
     }
 
     function onFilterChange() {
@@ -2014,6 +2039,23 @@
       document.getElementById('headerCount').textContent = summary.totalCount + '件';
     }
 
+    async function loadAnnualSalesHeader() {
+      try {
+        const ym = currentFilters.yearMonth;
+        const year = ym ? ym.split('-')[0] : String(new Date().getFullYear());
+        if (annualSalesCache[year] !== undefined) {
+          document.getElementById('headerAnnual').textContent = `年累計 ¥${annualSalesCache[year].toLocaleString()}`;
+          return;
+        }
+        const total = await runGAS('getYearlySales', parseInt(year, 10));
+        annualSalesCache[year] = total;
+        document.getElementById('headerAnnual').textContent = `年累計 ¥${total.toLocaleString()}`;
+      } catch (error) {
+        console.error('Annual load error:', error);
+        document.getElementById('headerAnnual').textContent = '年累計 取得エラー';
+      }
+    }
+
     function selectReservation(rowIndex) {
       selectedReservation = reservations.find(r => r.rowIndex === rowIndex);
       
@@ -2156,7 +2198,16 @@
         showLoading();
         
         const yearMonth = currentFilters.yearMonth;
-        const bundle = await runGAS('getAnalysisBundle', yearMonth);
+        let bundle = analysisCache[yearMonth]?.bundle;
+        
+        if (!bundle) {
+          bundle = await runGAS('getAnalysisBundle', yearMonth);
+          analysisCache[yearMonth] = { bundle };
+        }
+        // トレンドはサブタブでも使うのでキャッシュ
+        if (bundle?.trend) {
+          analysisSubCache.sales[yearMonth] = bundle.trend;
+        }
         
         renderKPIs(bundle.summary);
         renderSalesChart(bundle.trend);
@@ -2175,13 +2226,25 @@
         const yearMonth = currentFilters.yearMonth;
         
         if (sub === 'customers') {
-          const data = await runGAS('getCustomerAnalysis', yearMonth);
+          let data = analysisSubCache.customers[yearMonth];
+          if (!data) {
+            data = await runGAS('getCustomerAnalysis', yearMonth);
+            analysisSubCache.customers[yearMonth] = data;
+          }
           renderCustomerAnalysis(data);
         } else if (sub === 'sales') {
-          const trend = await runGAS('getSalesTrend', 12);
+          let trend = analysisCache[yearMonth]?.bundle?.trend || analysisSubCache.sales[yearMonth];
+          if (!trend) {
+            trend = await runGAS('getSalesTrend', 12);
+            analysisSubCache.sales[yearMonth] = trend;
+          }
           renderSalesTrendCharts(trend);
         } else if (sub === 'menu') {
-          const data = await runGAS('getMenuAnalysis', yearMonth);
+          let data = analysisSubCache.menu[yearMonth];
+          if (!data) {
+            data = await runGAS('getMenuAnalysis', yearMonth);
+            analysisSubCache.menu[yearMonth] = data;
+          }
           renderMenuAnalysis(data);
         }
         

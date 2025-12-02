@@ -880,9 +880,11 @@ function getCustomerAnalysis(yearMonth) {
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var patientsSheet = ss.getSheetByName(PATIENTS_SHEET);
+    var reservationsSheet = ss.getSheetByName(SHEET_NAME);
     
-    var data = getSheetValues_(patientsSheet);
-    if (data.length < 1) {
+    var patData = getSheetValues_(patientsSheet);
+    var resData = getSheetValues_(reservationsSheet);
+    if (patData.length < 1 || resData.length < 1) {
       return {
         visitDistribution: {
           '1回': 0,
@@ -895,8 +897,51 @@ function getCustomerAnalysis(yearMonth) {
         averageVisits: 0
       };
     }
-    var headers = data[0];
-    var col = getPatientColumnIndexes_(headers);
+    var patHeaders = patData[0];
+    var patCol = getPatientColumnIndexes_(patHeaders);
+    var resHeaders = resData[0];
+    var resCol = getColumnIndexes_(resHeaders);
+    
+    // 対象年月に来院した患者のみを抽出
+    var targetYM = yearMonth || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM');
+    var targetPatients = {};
+    for (var i = 1; i < resData.length; i++) {
+      var row = resData[i];
+      var dateValue = row[resCol.date];
+      if (!dateValue) continue;
+      var ym = formatYearMonth_(dateValue);
+      if (ym !== targetYM) continue;
+      var patientName = row[resCol.patient] || '';
+      if (patientName) {
+        targetPatients[patientName] = true;
+      }
+    }
+    
+    // 来院していない場合は0を返す
+    var targetNames = Object.keys(targetPatients);
+    if (targetNames.length === 0) {
+      return {
+        visitDistribution: {
+          '1回': 0,
+          '2-5回': 0,
+          '6-10回': 0,
+          '11-20回': 0,
+          '21回以上': 0
+        },
+        totalPatients: 0,
+        averageVisits: 0
+      };
+    }
+    
+    // 患者シートをマップ化（名前ベース）
+    var patientMap = {};
+    for (var p = 1; p < patData.length; p++) {
+      var prow = patData[p];
+      var name = prow[patCol.name] || '';
+      if (name) {
+        patientMap[name] = prow;
+      }
+    }
     
     // 来院回数分布
     var distribution = {
@@ -910,11 +955,17 @@ function getCustomerAnalysis(yearMonth) {
     var totalPatients = 0;
     var totalVisits = 0;
     
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      var visitCount = parseInt(row[col.visitCount]) || 0;
-      
-      if (visitCount === 0) continue;
+    for (var t = 0; t < targetNames.length; t++) {
+      var name = targetNames[t];
+      var prowData = patientMap[name];
+      var visitCount = 0;
+      if (prowData) {
+        visitCount = parseInt(prowData[patCol.visitCount]) || 0;
+      }
+      // visitCountが0でも、対象月に来院があれば1とみなす
+      if (visitCount === 0) {
+        visitCount = 1;
+      }
       
       totalPatients++;
       totalVisits += visitCount;
@@ -1310,5 +1361,49 @@ function getMonthlySales(yearMonth) {
   } catch (error) {
     console.error('getMonthlySales error:', error);
     throw new Error('月別売上取得エラー: ' + error.message);
+  }
+}
+
+/**
+ * 指定年の売上合計を取得（ヘッダー表示用）
+ * @param {number} year - 西暦（例: 2025）
+ * @return {number} 年間売上合計
+ */
+function getYearlySales(year) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAME);
+    
+    var data = getSheetValues_(sheet);
+    if (data.length < 1) {
+      return 0;
+    }
+    var headers = data[0];
+    var col = getColumnIndexes_(headers);
+    
+    var totalSales = 0;
+    
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var dateValue = row[col.date];
+      if (!dateValue) continue;
+      
+      var dateObj = (dateValue instanceof Date) ? dateValue : null;
+      var yearStr = '';
+      if (dateObj) {
+        yearStr = String(dateObj.getFullYear());
+      } else {
+        yearStr = String(dateValue).split('/')[0] || '';
+      }
+      if (String(year) !== yearStr) continue;
+      
+      totalSales += parseAmount_(row[col.amount]);
+    }
+    
+    return totalSales;
+    
+  } catch (error) {
+    console.error('getYearlySales error:', error);
+    throw new Error('年間売上取得エラー: ' + error.message);
   }
 }
