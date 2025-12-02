@@ -1722,6 +1722,19 @@
       alert(message);
     }
 
+    // 予期せぬエラー時もローディングを閉じ、ユーザー向けに通知
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      hideLoading();
+      showUserError('予期せぬエラーが発生しました。シートの設定や列名を確認してください。\n' + (event.reason?.message || event.reason));
+    });
+
+    window.addEventListener('error', (event) => {
+      console.error('Unhandled error:', event.error);
+      hideLoading();
+      showUserError('エラーが発生しました。操作をやり直してください。\n' + (event.error?.message || event.message));
+    });
+
     // Chart.js を必要時にロード
     function ensureChartJs() {
       if (window.Chart) return Promise.resolve();
