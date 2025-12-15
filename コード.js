@@ -901,9 +901,32 @@ function getAnalysisBundleForYear(year, months) {
       var prevYearStr = String(y - 1);
       var startYM = yearStr + '-01';
 
+      // 年次表示は「今日時点」を基本にする（過去年は年末時点）
+      var now = new Date();
+      var currentYearNow = parseInt(Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy'), 10);
+      var baseDate = (y === currentYearNow) ? now : new Date(y, 11, 31, 23, 59, 59);
+      var prevBaseDate = (y === currentYearNow) ? new Date(baseDate.getTime()) : new Date(y - 1, 11, 31, 23, 59, 59);
+      if (y === currentYearNow) {
+        try {
+          prevBaseDate.setFullYear(y - 1);
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      function toDate_(v) {
+        if (!v) return null;
+        if (v instanceof Date) return v;
+        var s = String(v);
+        var m = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+        if (!m) return null;
+        return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+      }
+
       var currentYearData = { sales: 0, count: 0, patients: {} };
       var prevYearData = { sales: 0, count: 0, patients: {} };
-      var visitedBeforeStart = {};
+      var lastVisitByPatient = {};
+      var lastVisitPrevByPatient = {};
 
       var monthly = {};
       for (var m = 1; m <= 12; m++) {
@@ -916,20 +939,23 @@ function getAnalysisBundleForYear(year, months) {
         var dateValue = row[resCol.date];
         if (!dateValue) continue;
 
+        var dateObj = toDate_(dateValue);
+        if (!dateObj) continue;
+
         var ym = formatYearMonth_(dateValue);
         if (!ym) continue;
 
         var amount = parseAmount_(row[resCol.amount]);
         var patient = row[resCol.patient] || '';
 
-        if (patient && ym < startYM) {
-          visitedBeforeStart[patient] = true;
-        }
-
-        if (ym.substring(0, 4) === yearStr) {
+        if (ym.substring(0, 4) === yearStr && dateObj <= baseDate) {
           currentYearData.sales += amount;
           currentYearData.count++;
           if (patient) currentYearData.patients[patient] = true;
+          if (patient) {
+            var prevLast = lastVisitByPatient[patient];
+            if (!prevLast || dateObj > prevLast) lastVisitByPatient[patient] = dateObj;
+          }
 
           if (!monthly[ym]) {
             monthly[ym] = { sales: 0, count: 0, patients: {} };
@@ -937,24 +963,40 @@ function getAnalysisBundleForYear(year, months) {
           monthly[ym].sales += amount;
           monthly[ym].count++;
           if (patient) monthly[ym].patients[patient] = true;
-        } else if (ym.substring(0, 4) === prevYearStr) {
+        } else if (ym.substring(0, 4) === prevYearStr && dateObj <= prevBaseDate) {
           prevYearData.sales += amount;
           prevYearData.count++;
           if (patient) prevYearData.patients[patient] = true;
+          if (patient) {
+            var prevLast2 = lastVisitPrevByPatient[patient];
+            if (!prevLast2 || dateObj > prevLast2) lastVisitPrevByPatient[patient] = dateObj;
+          }
         }
       }
 
       var currentUniquePatients = Object.keys(currentYearData.patients).length;
       var prevUniquePatients = Object.keys(prevYearData.patients).length;
 
-      var repeatCount = 0;
-      var currentPatients = Object.keys(currentYearData.patients);
-      for (var j = 0; j < currentPatients.length; j++) {
-        var name = currentPatients[j];
-        if (visitedBeforeStart[name]) repeatCount++;
+      // 年次リピート率（実績）は「継続率(90日)」= 年内来院者のうち基準日から90日未満の割合
+      function calcActiveRate_(patientsMap, lastVisitMap, base) {
+        var names = Object.keys(patientsMap || {});
+        if (names.length === 0) return { rate: 0, activeCount: 0, cohort: 0 };
+        var active = 0;
+        for (var i2 = 0; i2 < names.length; i2++) {
+          var nm = names[i2];
+          var lv = lastVisitMap[nm];
+          if (!lv) continue;
+          var days = daysBetween_(base, lv);
+          if (days < 90) active++;
+        }
+        var rate = (active / names.length) * 100;
+        rate = Math.round(rate * 10) / 10;
+        return { rate: rate, activeCount: active, cohort: names.length };
       }
-      var repeatRate = currentUniquePatients > 0 ? (repeatCount / currentUniquePatients * 100) : 0;
-      repeatRate = Math.round(repeatRate * 10) / 10;
+
+      var active = calcActiveRate_(currentYearData.patients, lastVisitByPatient, baseDate);
+      var activePrev = calcActiveRate_(prevYearData.patients, lastVisitPrevByPatient, prevBaseDate);
+      var repeatRate = active.rate;
 
       var salesDiff = currentYearData.sales - prevYearData.sales;
       var salesRate = prevYearData.sales > 0 ? (salesDiff / prevYearData.sales * 100) : 0;
@@ -996,6 +1038,20 @@ function getAnalysisBundleForYear(year, months) {
         return b.daysSinceVisit - a.daysSinceVisit;
       });
 
+      // 月平均（12固定）
+      var avgCount = Math.round(currentYearData.count / 12);
+      var avgUniqueSum = 0;
+      for (var moSum = 1; moSum <= 12; moSum++) {
+        var mmSum = ('0' + moSum).slice(-2);
+        var keySum = yearStr + '-' + mmSum;
+        var dSum = monthly[keySum] || { patients: {} };
+        avgUniqueSum += Object.keys(dSum.patients || {}).length;
+      }
+      var avgUniquePatients = Math.round(avgUniqueSum / 12);
+
+      var avgCountPrev = Math.round(prevYearData.count / 12);
+      // 前年の月別ユニーク平均は「前年の月別」も必要だが、同比較としては件数/継続率を優先する
+
       var trend = [];
       for (var mo = 1; mo <= 12; mo++) {
         var mm2 = ('0' + mo).slice(-2);
@@ -1013,20 +1069,33 @@ function getAnalysisBundleForYear(year, months) {
         currentYear: {
           sales: currentYearData.sales,
           count: currentYearData.count,
-          uniquePatients: currentUniquePatients
+          uniquePatients: currentUniquePatients,
+          avgCount: avgCount,
+          avgUniquePatients: avgUniquePatients,
+          activeRate: active.rate,
+          activeCount: active.activeCount,
+          cohortPatients: active.cohort
         },
         previousYear: {
           sales: prevYearData.sales,
           count: prevYearData.count,
-          uniquePatients: prevUniquePatients
+          uniquePatients: prevUniquePatients,
+          avgCount: avgCountPrev,
+          activeRate: activePrev.rate,
+          activeCount: activePrev.activeCount,
+          cohortPatients: activePrev.cohort
         },
         comparison: {
           salesDiff: salesDiff,
           salesRate: Math.round(salesRate * 100) / 100,
           countDiff: countDiff,
-          countRate: Math.round(countRate * 100) / 100
+          countRate: Math.round(countRate * 100) / 100,
+          repeatPtDiff: Math.round((active.rate - activePrev.rate) * 10) / 10,
+          repeatPrev: activePrev.rate
         },
         repeatRate: repeatRate,
+        baseDate: formatDate_(baseDate),
+        prevBaseDate: formatDate_(prevBaseDate),
         churnWarning: churnWarning,
         churnConfirmed: churnConfirmed
       };

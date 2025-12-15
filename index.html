@@ -859,6 +859,18 @@
       font-weight: 700;
       color: var(--text);
       letter-spacing: -1px;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .kpi-inline-note {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-light);
+      letter-spacing: 0;
+      white-space: nowrap;
     }
 
     .kpi-sub {
@@ -2872,8 +2884,19 @@
       const isYear = period && period.type === 'year';
       const title = isYear ? `${period.year}年売上` : '今月売上';
       const compareLabel = isYear ? `${parseInt(period.year, 10) - 1}年比` : '前月比';
-      const visitHelp = isYear ? `${period.year}年来院者のうち` : '今月来院者のうち';
+      const visitHelp = isYear
+        ? `${period.year}年来院者のうち（90日以内アクティブ）`
+        : '今月来院者のうち';
+      const baseDateNote = isYear && summary.baseDate ? `基準日 ${summary.baseDate}` : '';
       const current = isYear ? summary.currentYear : summary.currentMonth;
+      const countValue = isYear ? (current.avgCount ?? Math.round((current.count || 0) / 12)) : current.count;
+      const uniqueValue = isYear ? (current.avgUniquePatients ?? Math.round((current.uniquePatients || 0) / 12)) : current.uniquePatients;
+      const repeatPtDiff = isYear && summary.comparison && typeof summary.comparison.repeatPtDiff === 'number'
+        ? summary.comparison.repeatPtDiff
+        : null;
+      const repeatDiffLabel = repeatPtDiff === null
+        ? ''
+        : `前年差 ${repeatPtDiff >= 0 ? '+' : ''}${repeatPtDiff.toFixed(1)}pt`;
       
       grid.innerHTML = `
         <div class="kpi-card">
@@ -2886,13 +2909,16 @@
         </div>
         <div class="kpi-card">
           <div class="kpi-label">来院数</div>
-          <div class="kpi-value">${current.count}件</div>
-          <div class="kpi-sub">${current.uniquePatients}名</div>
+          <div class="kpi-value">${isYear ? '月平均 ' : ''}${countValue}件</div>
+          <div class="kpi-sub">${isYear ? '月平均 ' : ''}${uniqueValue}名</div>
         </div>
         <div class="kpi-card success">
           <div class="kpi-label">リピート率</div>
-          <div class="kpi-value">${summary.repeatRate}%</div>
-          <div class="kpi-sub">${visitHelp}</div>
+          <div class="kpi-value">
+            ${summary.repeatRate}%
+            ${repeatDiffLabel ? `<span class="kpi-inline-note">${repeatDiffLabel}</span>` : ''}
+          </div>
+          <div class="kpi-sub">${visitHelp}${baseDateNote ? ` / ${baseDateNote}` : ''}</div>
         </div>
         <div class="kpi-card warning">
           <div class="kpi-label">離反予備軍</div>
