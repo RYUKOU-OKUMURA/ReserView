@@ -14,6 +14,7 @@ var SPREADSHEET_ID = '1z-OuS5riqLp8PYKECOnPzjBWPjgvUa6KKg5c4Ne-g08';
 var SHEET_NAME = 'Reservations';
 var PATIENTS_SHEET = 'Patients';
 var EXPENSES_SHEET = 'Expenses';  // Phase 3で使用
+var ANNUAL_PLAN_SHEET = 'AnnualPlans'; // 年次の予算/計画（CF用）
 
 // ========================================
 // Webアプリ エントリーポイント
@@ -1527,5 +1528,396 @@ function getYearlySales(year) {
   } catch (error) {
     console.error('getYearlySales error:', error);
     throw new Error('年間売上取得エラー: ' + error.message);
+  }
+}
+
+// ========================================
+// 年次/期間集計 + ダウンロード（Sales Summary）
+// ========================================
+
+/**
+ * 年月文字列(yyyy-MM)の妥当性チェック
+ * @param {string} yearMonth
+ * @return {boolean}
+ */
+function isValidYearMonth_(yearMonth) {
+  return /^\d{4}-\d{2}$/.test(String(yearMonth || ''));
+}
+
+/**
+ * 指定した年月の範囲（両端含む）を yyyy-MM の配列で返す
+ * @param {string} startYearMonth
+ * @param {string} endYearMonth
+ * @return {Array<string>}
+ */
+function listYearMonthsBetween_(startYearMonth, endYearMonth) {
+  if (!isValidYearMonth_(startYearMonth) || !isValidYearMonth_(endYearMonth)) {
+    throw new Error('年月は yyyy-MM 形式で指定してください');
+  }
+
+  var start = yearMonthToDate_(startYearMonth);
+  var end = yearMonthToDate_(endYearMonth);
+  if (start > end) {
+    var tmp = start;
+    start = end;
+    end = tmp;
+  }
+
+  var yms = [];
+  var cursor = new Date(start.getTime());
+  while (cursor <= end) {
+    yms.push(Utilities.formatDate(cursor, 'Asia/Tokyo', 'yyyy-MM'));
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return yms;
+}
+
+/**
+ * 期間の売上サマリーをGoogleスプレッドシートに出力してURLを返す
+ * - 画面側でExcelとしてダウンロード可能（ファイル→ダウンロード）
+ * @param {string} startYearMonth - yyyy-MM
+ * @param {string} endYearMonth - yyyy-MM
+ * @return {Object} { spreadsheetId, url, name }
+ */
+function exportSalesSummary(startYearMonth, endYearMonth) {
+  try {
+    var yms = listYearMonthsBetween_(startYearMonth, endYearMonth);
+    var rangeLabel = yms.length === 1 ? yms[0] : (yms[0] + '〜' + yms[yms.length - 1]);
+
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var reservationsSheet = ss.getSheetByName(SHEET_NAME);
+    if (!reservationsSheet) {
+      throw new Error('シートが見つかりません: ' + SHEET_NAME);
+    }
+
+    var data = getSheetValues_(reservationsSheet);
+    if (data.length < 2) {
+      data = data.slice(0, 1);
+    }
+
+    var headers = data[0] || [];
+    var col = headers.length ? getColumnIndexes_(headers) : {};
+
+    var ymSet = {};
+    for (var i = 0; i < yms.length; i++) ymSet[yms[i]] = true;
+
+    var monthly = {};
+    yms.forEach(function(ym) {
+      monthly[ym] = { sales: 0, count: 0, patients: {} };
+    });
+    var byPayment = {};
+    var byMenu = {};
+    var totalSales = 0;
+    var totalCount = 0;
+    var totalPatients = {};
+
+    for (var r = 1; r < data.length; r++) {
+      var row = data[r];
+      var dateValue = row[col.date];
+      if (!dateValue) continue;
+
+      var ym = formatYearMonth_(dateValue);
+      if (!ymSet[ym]) continue;
+
+      var amount = parseAmount_(row[col.amount]);
+      var payment = (row[col.payment] || '').toString();
+      var menu = (row[col.menu] || '未設定').toString();
+      var patient = (row[col.patient] || '').toString();
+
+      monthly[ym].sales += amount;
+      monthly[ym].count++;
+      if (patient) {
+        monthly[ym].patients[patient] = true;
+        totalPatients[patient] = true;
+      }
+
+      totalSales += amount;
+      totalCount++;
+
+      if (payment) {
+        if (!byPayment[payment]) byPayment[payment] = 0;
+        byPayment[payment] += amount;
+      }
+      if (menu) {
+        if (!byMenu[menu]) byMenu[menu] = { count: 0, amount: 0 };
+        byMenu[menu].count++;
+        byMenu[menu].amount += amount;
+      }
+    }
+
+    // 出力用スプレッドシート作成
+    var name = '売上サマリー_' + rangeLabel.replace('〜', '-') + '_' +
+      Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss');
+    var out = SpreadsheetApp.create(name);
+
+    // フォルダへ移動（任意）
+    try {
+      var folderName = 'ReserView_Exports';
+      var folders = DriveApp.getFoldersByName(folderName);
+      var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+      var file = DriveApp.getFileById(out.getId());
+      folder.addFile(file);
+      DriveApp.getRootFolder().removeFile(file);
+    } catch (e) {
+      // フォルダ移動失敗は致命的ではない
+    }
+
+    // シート1: 月別サマリー
+    var sheet1 = out.getSheets()[0];
+    sheet1.setName('月別サマリー');
+    sheet1.getRange(1, 1, 1, 6).setValues([['期間', '年月', '売上', '件数', 'ユニーク患者数', '備考']]);
+
+    var rows1 = [];
+    for (var j = 0; j < yms.length; j++) {
+      var k = yms[j];
+      var d = monthly[k];
+      rows1.push([
+        rangeLabel,
+        k,
+        d.sales,
+        d.count,
+        Object.keys(d.patients).length,
+        ''
+      ]);
+    }
+    if (rows1.length > 0) {
+      sheet1.getRange(2, 1, rows1.length, 6).setValues(rows1);
+    }
+    sheet1.getRange(2, 3, Math.max(rows1.length, 1), 1).setNumberFormat('¥#,##0');
+    sheet1.getRange(2, 3, Math.max(rows1.length, 1), 1).setHorizontalAlignment('right');
+    sheet1.autoResizeColumns(1, 6);
+
+    // 総計行
+    sheet1.getRange(rows1.length + 3, 1, 1, 6).setValues([[
+      '合計',
+      '',
+      totalSales,
+      totalCount,
+      Object.keys(totalPatients).length,
+      ''
+    ]]);
+    sheet1.getRange(rows1.length + 3, 3, 1, 1).setNumberFormat('¥#,##0');
+
+    // シート2: 決済方法別
+    var sheet2 = out.insertSheet('決済方法別');
+    sheet2.getRange(1, 1, 1, 4).setValues([['期間', '決済方法', '売上', '構成比(%)']]);
+    var payments = Object.keys(byPayment).sort();
+    var rows2 = payments.map(function(p) {
+      var amt = byPayment[p] || 0;
+      var pct = totalSales > 0 ? Math.round(amt / totalSales * 1000) / 10 : 0;
+      return [rangeLabel, p, amt, pct];
+    });
+    if (rows2.length > 0) {
+      sheet2.getRange(2, 1, rows2.length, 4).setValues(rows2);
+      sheet2.getRange(2, 3, rows2.length, 1).setNumberFormat('¥#,##0');
+      sheet2.getRange(2, 4, rows2.length, 1).setNumberFormat('0.0');
+    }
+    sheet2.autoResizeColumns(1, 4);
+
+    // シート3: メニュー別
+    var sheet3 = out.insertSheet('メニュー別');
+    sheet3.getRange(1, 1, 1, 5).setValues([['期間', 'メニュー', '件数', '売上', '構成比(%)']]);
+    var menus = [];
+    for (var mn in byMenu) {
+      if (byMenu.hasOwnProperty(mn)) {
+        menus.push({
+          menu: mn,
+          count: byMenu[mn].count,
+          amount: byMenu[mn].amount
+        });
+      }
+    }
+    menus.sort(function(a, b) { return b.amount - a.amount; });
+    var rows3 = menus.map(function(m) {
+      var pct = totalSales > 0 ? Math.round(m.amount / totalSales * 1000) / 10 : 0;
+      return [rangeLabel, m.menu, m.count, m.amount, pct];
+    });
+    if (rows3.length > 0) {
+      sheet3.getRange(2, 1, rows3.length, 5).setValues(rows3);
+      sheet3.getRange(2, 4, rows3.length, 1).setNumberFormat('¥#,##0');
+      sheet3.getRange(2, 5, rows3.length, 1).setNumberFormat('0.0');
+    }
+    sheet3.autoResizeColumns(1, 5);
+
+    SpreadsheetApp.flush();
+
+    return {
+      spreadsheetId: out.getId(),
+      url: out.getUrl(),
+      name: name
+    };
+  } catch (error) {
+    console.error('exportSalesSummary error:', error);
+    throw new Error('売上サマリー出力エラー: ' + error.message);
+  }
+}
+
+// ========================================
+// CFモード：年次（実績/計画）
+// ========================================
+
+function normalizeAnnualPlan_(year, planRow) {
+  var y = parseInt(year, 10);
+  return {
+    year: y,
+    sales: planRow && planRow.sales ? planRow.sales : 0,
+    variable: planRow && planRow.variable ? planRow.variable : 0,
+    labor: planRow && planRow.labor ? planRow.labor : 0,
+    otherFixed: planRow && planRow.otherFixed ? planRow.otherFixed : 0,
+    depreciation: planRow && planRow.depreciation ? planRow.depreciation : 0,
+    loanPayment: planRow && planRow.loanPayment ? planRow.loanPayment : 0,
+    capex: planRow && planRow.capex ? planRow.capex : 0
+  };
+}
+
+/**
+ * 年次CF用：実績（Reservationsの年合計 + Expensesの年合計）
+ * @param {number} year
+ * @return {Object}
+ */
+function getYearlyActualCashFlow_(year) {
+  var y = parseInt(year, 10);
+  if (!y) throw new Error('年が不正です');
+
+  var sales = getYearlySales(y);
+  var totals = {
+    year: y,
+    sales: sales,
+    variable: 0,
+    labor: 0,
+    otherFixed: 0,
+    depreciation: 0,
+    loanPayment: 0,
+    capex: 0
+  };
+
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(EXPENSES_SHEET);
+  if (!sheet) return totals;
+
+  var values = getSheetValues_(sheet);
+  if (values.length < 2) return totals;
+
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    var ym = String(row[0] || '');
+    if (ym.substring(0, 4) !== String(y)) continue;
+    totals.variable += parseAmount_(row[1]);
+    totals.labor += parseAmount_(row[2]);
+    totals.otherFixed += parseAmount_(row[3]);
+    totals.depreciation += parseAmount_(row[4]);
+    totals.loanPayment += parseAmount_(row[5]);
+    totals.capex += parseAmount_(row[6]);
+  }
+
+  return totals;
+}
+
+/**
+ * 年次計画を取得（存在しなければ0で返す）
+ * @param {number} year
+ * @return {Object}
+ */
+function getAnnualPlan(year) {
+  try {
+    var y = parseInt(year, 10);
+    if (!y) throw new Error('年が不正です');
+
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(ANNUAL_PLAN_SHEET);
+    if (!sheet) return normalizeAnnualPlan_(y, null);
+
+    var values = getSheetValues_(sheet);
+    if (values.length < 2) return normalizeAnnualPlan_(y, null);
+
+    for (var i = 1; i < values.length; i++) {
+      var row = values[i];
+      if (parseInt(row[0], 10) !== y) continue;
+      return normalizeAnnualPlan_(y, {
+        sales: parseAmount_(row[1]),
+        variable: parseAmount_(row[2]),
+        labor: parseAmount_(row[3]),
+        otherFixed: parseAmount_(row[4]),
+        depreciation: parseAmount_(row[5]),
+        loanPayment: parseAmount_(row[6]),
+        capex: parseAmount_(row[7])
+      });
+    }
+
+    return normalizeAnnualPlan_(y, null);
+  } catch (error) {
+    console.error('getAnnualPlan error:', error);
+    throw new Error('年次計画取得エラー: ' + error.message);
+  }
+}
+
+/**
+ * 年次計画を保存
+ * @param {number} year
+ * @param {Object} data
+ * @return {Object}
+ */
+function saveAnnualPlan(year, data) {
+  try {
+    var y = parseInt(year, 10);
+    if (!y) throw new Error('年が不正です');
+
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(ANNUAL_PLAN_SHEET);
+    if (!sheet) {
+      sheet = ss.insertSheet(ANNUAL_PLAN_SHEET);
+      sheet.appendRow(['年', '売上(計画)', '変動費', '人件費', 'その他固定費', '減価償却費', '借入返済', '設備投資', '更新日時', '更新者']);
+    }
+
+    var values = getSheetValues_(sheet);
+    var rowIndex = -1;
+    for (var i = 1; i < values.length; i++) {
+      if (parseInt(values[i][0], 10) === y) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    var rowData = [
+      y,
+      data.sales || 0,
+      data.variable || 0,
+      data.labor || 0,
+      data.otherFixed || 0,
+      data.depreciation || 0,
+      data.loanPayment || 0,
+      data.capex || 0,
+      new Date(),
+      Session.getActiveUser().getEmail()
+    ];
+
+    if (rowIndex > 0) {
+      sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      sheet.appendRow(rowData);
+    }
+
+    SpreadsheetApp.flush();
+    return { success: true };
+  } catch (error) {
+    console.error('saveAnnualPlan error:', error);
+    throw new Error('年次計画保存エラー: ' + error.message);
+  }
+}
+
+/**
+ * CF年次表示用データ（実績/計画）
+ * @param {number} year
+ * @param {string} mode - "actual" | "plan"
+ * @return {Object}
+ */
+function getYearlyCashFlow(year, mode) {
+  try {
+    mode = mode || 'actual';
+    if (mode === 'plan') return getAnnualPlan(year);
+    return getYearlyActualCashFlow_(year);
+  } catch (error) {
+    console.error('getYearlyCashFlow error:', error);
+    throw new Error('年次CF取得エラー: ' + error.message);
   }
 }

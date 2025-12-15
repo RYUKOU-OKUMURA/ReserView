@@ -156,6 +156,12 @@
       color: var(--text-muted);
     }
 
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
     .header-annual {
       font-size: 13px;
       color: var(--text-light);
@@ -1226,6 +1232,75 @@
     .result-value.positive { color: var(--success); }
     .result-value.negative { color: var(--danger); }
 
+    /* モーダル */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1100;
+      padding: 18px;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal-card {
+      width: min(560px, 92vw);
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border-light);
+      overflow: hidden;
+    }
+
+    .modal-title {
+      padding: 16px 20px;
+      font-weight: 800;
+      color: var(--text);
+      border-bottom: 1px solid var(--border-light);
+      background: linear-gradient(135deg, #F0FDF4 0%, #ECFDF3 100%);
+    }
+
+    .modal-body {
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .modal-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .modal-range {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .modal-note {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .modal-actions {
+      padding: 14px 20px 18px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      border-top: 1px solid var(--border-light);
+      background: var(--bg);
+    }
+
     .loading-overlay {
       position: fixed;
       top: 0;
@@ -1285,6 +1360,9 @@
         <span class="header-annual" id="headerAnnual">年累計 ¥0</span>
         <span class="header-amount" id="headerAmount">¥0</span>
         <span class="header-count" id="headerCount">0件</span>
+      </div>
+      <div class="header-actions">
+        <button class="btn-sm btn-outline" id="openExport">集計DL</button>
       </div>
     </div>
   </header>
@@ -1491,11 +1569,26 @@
 
       <!-- CFモード -->
       <div class="mode-content" id="cashflowMode">
-        <div class="cf-content">
+          <div class="cf-content">
           <div class="cf-header">
             <div class="cf-month-select">
-              <span class="filter-label">対象月:</span>
+              <span class="filter-label">表示:</span>
+              <select id="cfPeriodType" class="filter-select filter-select-sm">
+                <option value="month">月次</option>
+                <option value="year">年次</option>
+              </select>
+
+              <span class="filter-label" id="cfTargetMonthLabel">対象月:</span>
               <select id="cfYearMonth" class="filter-select"></select>
+
+              <span class="filter-label" id="cfTargetYearLabel" style="display:none;">対象年:</span>
+              <select id="cfYear" class="filter-select" style="display:none;"></select>
+
+              <span class="filter-label" id="cfYearModeLabel" style="display:none;">区分:</span>
+              <select id="cfYearMode" class="filter-select filter-select-sm" style="display:none;">
+                <option value="actual">実績</option>
+                <option value="plan">計画</option>
+              </select>
             </div>
             <div class="cf-actions">
               <button class="btn-sm btn-outline" id="cfCopyPrev">前月コピー</button>
@@ -1548,7 +1641,7 @@
               <div class="expense-form-card">
                 <div class="expense-form-title">📝 経費入力</div>
                 <div class="expense-item">
-                  <span class="expense-label">売上（自動取得）</span>
+                  <span class="expense-label" id="salesLabel">売上（自動取得）</span>
                   <input type="text" class="expense-input" id="inputSales" readonly>
                 </div>
                 <div class="expense-item">
@@ -1598,6 +1691,34 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 売上サマリー出力モーダル -->
+  <div class="modal-overlay" id="exportModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+      <div class="modal-title" id="exportModalTitle">📤 売上サマリーを出力</div>
+      <div class="modal-body">
+        <div class="modal-row">
+          <span class="filter-label">対象年</span>
+          <select id="exportYear" class="filter-select"></select>
+        </div>
+        <div class="modal-row">
+          <span class="filter-label">期間</span>
+          <div class="modal-range">
+            <select id="exportStartMonth" class="filter-select filter-select-sm"></select>
+            <span class="date-separator">〜</span>
+            <select id="exportEndMonth" class="filter-select filter-select-sm"></select>
+          </div>
+        </div>
+        <div class="modal-note">
+          Googleスプレッドシートを作成します（開いた後に「ファイル → ダウンロード → Microsoft Excel」でExcel化できます）。
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm btn-outline" id="exportCancel">キャンセル</button>
+        <button class="btn-sm btn-primary" id="exportRun">作成して開く</button>
       </div>
     </div>
   </div>
@@ -1779,6 +1900,7 @@
       
       // CFモード用年月セレクトも初期化
       initCFYearMonth();
+      initCFYearOptions();
     }
 
     function initCFYearMonth() {
@@ -1798,6 +1920,38 @@
         } else {
           select.value = filterOptions.yearMonths[0];
         }
+      }
+    }
+
+    function getAvailableYears() {
+      const years = new Set();
+      (filterOptions.yearMonths || []).forEach(ym => {
+        const y = String(ym).split('-')[0];
+        if (y) years.add(y);
+      });
+      const now = new Date();
+      const base = now.getFullYear();
+      [base, base + 1, base + 2].forEach(y => years.add(String(y)));
+      return Array.from(years).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+    }
+
+    function initCFYearOptions() {
+      const yearSelect = document.getElementById('cfYear');
+      if (!yearSelect) return;
+      yearSelect.innerHTML = '';
+
+      const years = getAvailableYears();
+      years.forEach(y => {
+        const option = document.createElement('option');
+        option.value = y;
+        option.textContent = `${y}年`;
+        yearSelect.appendChild(option);
+      });
+
+      const ym = currentFilters.yearMonth;
+      const currentYear = ym ? ym.split('-')[0] : String(new Date().getFullYear());
+      if (years.includes(currentYear)) {
+        yearSelect.value = currentYear;
       }
     }
 
@@ -1924,15 +2078,28 @@
       ['inputVariable', 'inputLabor', 'inputOtherFixed', 'inputDepreciation', 'inputLoanPayment', 'inputCapex'].forEach(id => {
         document.getElementById(id).addEventListener('input', calculateCashFlow);
       });
+      document.getElementById('inputSales').addEventListener('input', syncSalesDatasetFromInput);
+      document.getElementById('inputSales').addEventListener('blur', formatSalesInputIfEditable);
 
       // CFモード：年月変更
       document.getElementById('cfYearMonth').addEventListener('change', loadCFData);
+      document.getElementById('cfPeriodType').addEventListener('change', loadCFData);
+      document.getElementById('cfYear').addEventListener('change', loadCFData);
+      document.getElementById('cfYearMode').addEventListener('change', loadCFData);
 
       // CFモード：保存ボタン
       document.getElementById('cfSave').addEventListener('click', saveCFData);
 
       // CFモード：前月コピー
       document.getElementById('cfCopyPrev').addEventListener('click', copyPreviousMonth);
+
+      // 売上サマリー出力
+      document.getElementById('openExport').addEventListener('click', openExportModal);
+      document.getElementById('exportCancel').addEventListener('click', closeExportModal);
+      document.getElementById('exportRun').addEventListener('click', runExportSalesSummary);
+      document.getElementById('exportModal').addEventListener('click', function(e) {
+        if (e.target && e.target.id === 'exportModal') closeExportModal();
+      });
       
       // 初回年累計読み込み
       loadAnnualSalesHeader();
@@ -2800,9 +2967,95 @@
     // ========================================
     // CFモード：データ取得・計算・保存
     // ========================================
+    function parseCurrencyValue(value) {
+      if (value === null || value === undefined) return 0;
+      if (typeof value === 'number') return value;
+      const s = String(value).replace(/[¥,\s]/g, '');
+      const n = parseInt(s, 10);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function setSalesInputValue(sales, options = {}) {
+      const { readOnly = true, format = true } = options;
+      const el = document.getElementById('inputSales');
+      const n = parseInt(sales, 10) || 0;
+      el.readOnly = !!readOnly;
+      el.dataset.value = String(n);
+      el.value = format ? ('¥' + n.toLocaleString()) : String(n);
+    }
+
+    function syncSalesDatasetFromInput() {
+      const el = document.getElementById('inputSales');
+      if (el.readOnly) return;
+      el.dataset.value = String(parseCurrencyValue(el.value));
+      calculateCashFlow();
+    }
+
+    function formatSalesInputIfEditable() {
+      const el = document.getElementById('inputSales');
+      if (el.readOnly) return;
+      const n = parseCurrencyValue(el.value);
+      el.dataset.value = String(n);
+      el.value = '¥' + n.toLocaleString();
+    }
+
+    function syncCFPeriodUI() {
+      const periodType = document.getElementById('cfPeriodType').value || 'month';
+      const isYear = periodType === 'year';
+
+      document.getElementById('cfTargetMonthLabel').style.display = isYear ? 'none' : '';
+      document.getElementById('cfYearMonth').style.display = isYear ? 'none' : '';
+      document.getElementById('cfTargetYearLabel').style.display = isYear ? '' : 'none';
+      document.getElementById('cfYear').style.display = isYear ? '' : 'none';
+      document.getElementById('cfYearModeLabel').style.display = isYear ? '' : 'none';
+      document.getElementById('cfYearMode').style.display = isYear ? '' : 'none';
+
+      document.getElementById('cfCopyPrev').style.display = isYear ? 'none' : '';
+
+      const saveBtn = document.getElementById('cfSave');
+      if (!isYear) {
+        saveBtn.disabled = false;
+        document.getElementById('salesLabel').textContent = '売上（自動取得）';
+        setSalesInputValue(parseCurrencyValue(document.getElementById('inputSales').dataset.value || 0), { readOnly: true });
+        return;
+      }
+
+      const mode = document.getElementById('cfYearMode').value || 'actual';
+      if (mode === 'plan') {
+        saveBtn.disabled = false;
+        document.getElementById('salesLabel').textContent = '売上（計画）';
+      } else {
+        saveBtn.disabled = true;
+        document.getElementById('salesLabel').textContent = '売上（実績）';
+      }
+    }
+
     async function loadCFData() {
       showLoading();
       try {
+        syncCFPeriodUI();
+
+        const periodType = document.getElementById('cfPeriodType').value || 'month';
+
+        if (periodType === 'year') {
+          const year = parseInt(document.getElementById('cfYear').value, 10) || new Date().getFullYear();
+          const mode = document.getElementById('cfYearMode').value || 'actual';
+
+          const yearly = await runGAS('getYearlyCashFlow', year, mode);
+
+          setSalesInputValue(yearly.sales || 0, { readOnly: mode !== 'plan' });
+          document.getElementById('inputVariable').value = yearly.variable || 0;
+          document.getElementById('inputLabor').value = yearly.labor || 0;
+          document.getElementById('inputOtherFixed').value = yearly.otherFixed || 0;
+          document.getElementById('inputDepreciation').value = yearly.depreciation || 0;
+          document.getElementById('inputLoanPayment').value = yearly.loanPayment || 0;
+          document.getElementById('inputCapex').value = yearly.capex || 0;
+
+          syncCFPeriodUI();
+          calculateCashFlow();
+          return;
+        }
+
         let yearMonth = document.getElementById('cfYearMonth').value || currentFilters.yearMonth;
         if (!yearMonth && filterOptions.yearMonths.length > 0) {
           yearMonth = filterOptions.yearMonths[0];
@@ -2810,19 +3063,18 @@
         if (yearMonth && document.getElementById('cfYearMonth').value !== yearMonth) {
           document.getElementById('cfYearMonth').value = yearMonth;
         }
-        
+
         // 売上を取得（キャッシュ優先）
         let sales = monthlySalesCache[yearMonth];
         if (sales === undefined) {
           sales = await runGAS('getMonthlySales', yearMonth);
           monthlySalesCache[yearMonth] = sales;
         }
-        document.getElementById('inputSales').value = '¥' + sales.toLocaleString();
-        document.getElementById('inputSales').dataset.value = sales;
-        
+        setSalesInputValue(sales, { readOnly: true });
+
         // 経費データを取得（あれば）
         const expenses = await runGAS('getExpenses', yearMonth);
-        
+
         if (expenses) {
           document.getElementById('inputVariable').value = expenses.variable || 0;
           document.getElementById('inputLabor').value = expenses.labor || 0;
@@ -2839,7 +3091,8 @@
           document.getElementById('inputLoanPayment').value = 0;
           document.getElementById('inputCapex').value = 0;
         }
-        
+
+        syncCFPeriodUI();
         calculateCashFlow();
       } catch (error) {
         console.error('CF load error:', error);
@@ -2858,6 +3111,13 @@
         cfSelect.value = ym;
       } else if (!cfSelect.value && cfSelect.options.length > 0) {
         cfSelect.value = cfSelect.options[0].value;
+      }
+
+      const cfYearSelect = document.getElementById('cfYear');
+      if (cfYearSelect && ym) {
+        const year = String(ym).split('-')[0];
+        const hasYear = Array.from(cfYearSelect.options).some(opt => opt.value === year);
+        if (hasYear) cfYearSelect.value = year;
       }
     }
 
@@ -2905,6 +3165,31 @@
     async function saveCFData() {
       showLoading();
       try {
+        const periodType = document.getElementById('cfPeriodType').value || 'month';
+
+        if (periodType === 'year') {
+          const mode = document.getElementById('cfYearMode').value || 'actual';
+          if (mode !== 'plan') {
+            alert('年次（実績）は保存不要です');
+            return;
+          }
+
+          const year = parseInt(document.getElementById('cfYear').value, 10);
+          const data = {
+            sales: parseCurrencyValue(document.getElementById('inputSales').dataset.value || document.getElementById('inputSales').value),
+            variable: parseInt(document.getElementById('inputVariable').value) || 0,
+            labor: parseInt(document.getElementById('inputLabor').value) || 0,
+            otherFixed: parseInt(document.getElementById('inputOtherFixed').value) || 0,
+            depreciation: parseInt(document.getElementById('inputDepreciation').value) || 0,
+            loanPayment: parseInt(document.getElementById('inputLoanPayment').value) || 0,
+            capex: parseInt(document.getElementById('inputCapex').value) || 0
+          };
+
+          await runGAS('saveAnnualPlan', year, data);
+          alert('保存しました');
+          return;
+        }
+
         const yearMonth = document.getElementById('cfYearMonth').value;
         const data = {
           variable: parseInt(document.getElementById('inputVariable').value) || 0,
@@ -2914,7 +3199,7 @@
           loanPayment: parseInt(document.getElementById('inputLoanPayment').value) || 0,
           capex: parseInt(document.getElementById('inputCapex').value) || 0
         };
-        
+
         await runGAS('saveExpenses', yearMonth, data);
         alert('保存しました');
       } catch (error) {
@@ -2956,6 +3241,85 @@
     // ========================================
     // ユーティリティ
     // ========================================
+    function initExportModalOptions() {
+      const yearSelect = document.getElementById('exportYear');
+      const startMonthSelect = document.getElementById('exportStartMonth');
+      const endMonthSelect = document.getElementById('exportEndMonth');
+
+      yearSelect.innerHTML = '';
+      const years = getAvailableYears();
+      years.forEach(y => {
+        const option = document.createElement('option');
+        option.value = y;
+        option.textContent = `${y}年`;
+        yearSelect.appendChild(option);
+      });
+
+      const currentYear = (currentFilters.yearMonth || '').split('-')[0] || String(new Date().getFullYear());
+      if (years.includes(currentYear)) yearSelect.value = currentYear;
+
+      if (startMonthSelect.options.length === 0 || endMonthSelect.options.length === 0) {
+        startMonthSelect.innerHTML = '';
+        endMonthSelect.innerHTML = '';
+        for (let m = 1; m <= 12; m++) {
+          const opt1 = document.createElement('option');
+          opt1.value = String(m);
+          opt1.textContent = `${m}月`;
+          startMonthSelect.appendChild(opt1);
+          const opt2 = document.createElement('option');
+          opt2.value = String(m);
+          opt2.textContent = `${m}月`;
+          endMonthSelect.appendChild(opt2);
+        }
+      }
+
+      startMonthSelect.value = '1';
+      endMonthSelect.value = '12';
+    }
+
+    function openExportModal() {
+      initExportModalOptions();
+      const modal = document.getElementById('exportModal');
+      modal.classList.add('active');
+      modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeExportModal() {
+      const modal = document.getElementById('exportModal');
+      modal.classList.remove('active');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
+    async function runExportSalesSummary() {
+      const year = document.getElementById('exportYear').value;
+      const startMonth = parseInt(document.getElementById('exportStartMonth').value, 10);
+      const endMonth = parseInt(document.getElementById('exportEndMonth').value, 10);
+      if (!year || !startMonth || !endMonth) return;
+      if (startMonth > endMonth) {
+        alert('開始月は終了月以下にしてください');
+        return;
+      }
+
+      const startYM = `${year}-${String(startMonth).padStart(2, '0')}`;
+      const endYM = `${year}-${String(endMonth).padStart(2, '0')}`;
+
+      showLoading();
+      try {
+        const res = await runGAS('exportSalesSummary', startYM, endYM);
+        closeExportModal();
+        if (res && res.url) {
+          window.open(res.url, '_blank');
+        } else {
+          alert('出力に失敗しました（URLが取得できません）');
+        }
+      } catch (error) {
+        console.error('Export error:', error);
+        showUserError('出力エラー: ' + error.message);
+      } finally {
+        hideLoading();
+      }
+    }
+
     function formatYearMonthDisplay(ym) {
       const parts = ym.split('-');
       return parts[0] + '年' + parseInt(parts[1]) + '月';
