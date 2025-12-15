@@ -330,6 +330,9 @@ function getInitialData(yearMonth) {
 
     var filteredReservations = allReservations.filter(function(r) {
       if (!selectedYM) return true;
+      if (/^\d{4}$/.test(String(selectedYM))) {
+        return String(r.yearMonth || '').substring(0, 4) === String(selectedYM);
+      }
       return r.yearMonth === selectedYM;
     });
 
@@ -443,7 +446,12 @@ function getReservations(filters) {
 function matchesFilters_(filters, record) {
   // 月別フィルタ
   if (filters.yearMonth && filters.yearMonth !== '' && record.yearMonth !== filters.yearMonth) {
-    return false;
+    var ym = String(filters.yearMonth);
+    if (/^\d{4}$/.test(ym)) {
+      if (String(record.yearMonth || '').substring(0, 4) !== ym) return false;
+    } else {
+      return false;
+    }
   }
   
   // 日付範囲フィルタ（開始日）
@@ -625,6 +633,9 @@ function updateReservation(rowIndex, updates) {
  * @return {Object} { summary, trend, churnList }
  */
 function getAnalysisBundle(yearMonth, months) {
+  if (/^\d{4}$/.test(String(yearMonth || ''))) {
+    return getAnalysisBundleForYear(parseInt(yearMonth, 10), months);
+  }
   months = months || 12;
   if (!yearMonth) {
     yearMonth = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM');
@@ -837,6 +848,198 @@ function getAnalysisBundle(yearMonth, months) {
 }
 
 /**
+ * 分析データ一括取得（年次・サマリー/トレンド/離反リスト）
+ * @param {number} year - 対象年（例: 2025）
+ * @param {number} months - 未使用（互換のため）
+ * @return {Object} { summary, trend, churnList }
+ */
+function getAnalysisBundleForYear(year, months) {
+  var y = parseInt(year, 10);
+  if (!y) {
+    y = parseInt(Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy'), 10);
+  }
+
+  var cacheKey = ['analysisBundleYear', y].join(':');
+  return withCache_(cacheKey, 600, function() {
+    try {
+      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var reservationsSheet = ss.getSheetByName(SHEET_NAME);
+      var patientsSheet = ss.getSheetByName(PATIENTS_SHEET);
+
+      if (!reservationsSheet) {
+        throw new Error('シートが見つかりません: ' + SHEET_NAME);
+      }
+      if (!patientsSheet) {
+        throw new Error('シートが見つかりません: ' + PATIENTS_SHEET);
+      }
+
+      var resData = getSheetValues_(reservationsSheet);
+      var patData = getSheetValues_(patientsSheet);
+
+      if (resData.length < 1) {
+        return {
+          summary: {
+            currentYear: { sales: 0, count: 0, uniquePatients: 0 },
+            previousYear: { sales: 0, count: 0, uniquePatients: 0 },
+            comparison: { salesDiff: 0, salesRate: 0, countDiff: 0, countRate: 0 },
+            repeatRate: 0,
+            churnWarning: 0,
+            churnConfirmed: 0
+          },
+          trend: [],
+          churnList: []
+        };
+      }
+
+      var resHeaders = resData[0];
+      var resCol = getColumnIndexes_(resHeaders);
+
+      var patHeaders = patData[0] || [];
+      var patCol = patHeaders.length ? getPatientColumnIndexes_(patHeaders) : {};
+
+      var yearStr = String(y);
+      var prevYearStr = String(y - 1);
+      var startYM = yearStr + '-01';
+
+      var currentYearData = { sales: 0, count: 0, patients: {} };
+      var prevYearData = { sales: 0, count: 0, patients: {} };
+      var visitedBeforeStart = {};
+
+      var monthly = {};
+      for (var m = 1; m <= 12; m++) {
+        var mm = ('0' + m).slice(-2);
+        monthly[yearStr + '-' + mm] = { sales: 0, count: 0, patients: {} };
+      }
+
+      for (var i = 1; i < resData.length; i++) {
+        var row = resData[i];
+        var dateValue = row[resCol.date];
+        if (!dateValue) continue;
+
+        var ym = formatYearMonth_(dateValue);
+        if (!ym) continue;
+
+        var amount = parseAmount_(row[resCol.amount]);
+        var patient = row[resCol.patient] || '';
+
+        if (patient && ym < startYM) {
+          visitedBeforeStart[patient] = true;
+        }
+
+        if (ym.substring(0, 4) === yearStr) {
+          currentYearData.sales += amount;
+          currentYearData.count++;
+          if (patient) currentYearData.patients[patient] = true;
+
+          if (!monthly[ym]) {
+            monthly[ym] = { sales: 0, count: 0, patients: {} };
+          }
+          monthly[ym].sales += amount;
+          monthly[ym].count++;
+          if (patient) monthly[ym].patients[patient] = true;
+        } else if (ym.substring(0, 4) === prevYearStr) {
+          prevYearData.sales += amount;
+          prevYearData.count++;
+          if (patient) prevYearData.patients[patient] = true;
+        }
+      }
+
+      var currentUniquePatients = Object.keys(currentYearData.patients).length;
+      var prevUniquePatients = Object.keys(prevYearData.patients).length;
+
+      var repeatCount = 0;
+      var currentPatients = Object.keys(currentYearData.patients);
+      for (var j = 0; j < currentPatients.length; j++) {
+        var name = currentPatients[j];
+        if (visitedBeforeStart[name]) repeatCount++;
+      }
+      var repeatRate = currentUniquePatients > 0 ? (repeatCount / currentUniquePatients * 100) : 0;
+      repeatRate = Math.round(repeatRate * 10) / 10;
+
+      var salesDiff = currentYearData.sales - prevYearData.sales;
+      var salesRate = prevYearData.sales > 0 ? (salesDiff / prevYearData.sales * 100) : 0;
+      var countDiff = currentYearData.count - prevYearData.count;
+      var countRate = prevYearData.count > 0 ? (countDiff / prevYearData.count * 100) : 0;
+
+      // 離反リスト（患者シートの最終来院日ベース・年選択とは独立）
+      var today = new Date();
+      var churnWarning = 0;
+      var churnConfirmed = 0;
+      var churnList = [];
+
+      for (var p = 1; p < patData.length; p++) {
+        var patRow = patData[p];
+        var lastVisit = patRow[patCol.lastVisit];
+        if (!lastVisit || !(lastVisit instanceof Date)) continue;
+
+        var daysSince = daysBetween_(today, lastVisit);
+        if (daysSince >= 180) {
+          churnConfirmed++;
+        } else if (daysSince >= 90) {
+          churnWarning++;
+        }
+
+        if (daysSince >= 90) {
+          churnList.push({
+            patientId: patRow[patCol.id] || '',
+            patientName: patRow[patCol.name] || '',
+            lastVisit: formatDate_(lastVisit),
+            daysSinceVisit: daysSince,
+            status: daysSince >= 180 ? 'churned' : 'warning',
+            totalVisits: parseInt(patRow[patCol.visitCount]) || 0,
+            totalAmount: parseAmount_(patRow[patCol.totalAmount])
+          });
+        }
+      }
+
+      churnList.sort(function(a, b) {
+        return b.daysSinceVisit - a.daysSinceVisit;
+      });
+
+      var trend = [];
+      for (var mo = 1; mo <= 12; mo++) {
+        var mm2 = ('0' + mo).slice(-2);
+        var key = yearStr + '-' + mm2;
+        var d = monthly[key] || { sales: 0, count: 0, patients: {} };
+        trend.push({
+          yearMonth: key,
+          sales: d.sales,
+          count: d.count,
+          uniquePatients: Object.keys(d.patients).length
+        });
+      }
+
+      var summary = {
+        currentYear: {
+          sales: currentYearData.sales,
+          count: currentYearData.count,
+          uniquePatients: currentUniquePatients
+        },
+        previousYear: {
+          sales: prevYearData.sales,
+          count: prevYearData.count,
+          uniquePatients: prevUniquePatients
+        },
+        comparison: {
+          salesDiff: salesDiff,
+          salesRate: Math.round(salesRate * 100) / 100,
+          countDiff: countDiff,
+          countRate: Math.round(countRate * 100) / 100
+        },
+        repeatRate: repeatRate,
+        churnWarning: churnWarning,
+        churnConfirmed: churnConfirmed
+      };
+
+      return { summary: summary, trend: trend, churnList: churnList };
+    } catch (error) {
+      console.error('getAnalysisBundleForYear error:', error);
+      throw new Error('分析（年次）バンドル取得エラー: ' + error.message);
+    }
+  });
+}
+
+/**
  * 分析ダッシュボード用データを取得
  * @param {string} yearMonth - 対象年月（例: "2025-12"）
  * @return {Object} ダッシュボードデータ
@@ -998,6 +1201,9 @@ function getAnalysisSummary(yearMonth) {
  */
 function getCustomerAnalysis(yearMonth) {
   try {
+    if (/^\d{4}$/.test(String(yearMonth || ''))) {
+      return getCustomerAnalysisForYear(parseInt(yearMonth, 10));
+    }
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var patientsSheet = ss.getSheetByName(PATIENTS_SHEET);
     var reservationsSheet = ss.getSheetByName(SHEET_NAME);
@@ -1114,6 +1320,126 @@ function getCustomerAnalysis(yearMonth) {
   } catch (error) {
     console.error('getCustomerAnalysis error:', error);
     throw new Error('顧客分析データ取得エラー: ' + error.message);
+  }
+}
+
+/**
+ * 顧客分析データを取得（年次・来院回数分布）
+ * @param {number} year - 対象年
+ * @return {Object}
+ */
+function getCustomerAnalysisForYear(year) {
+  try {
+    var y = parseInt(year, 10);
+    if (!y) throw new Error('年が不正です');
+
+    var cacheKey = ['customerAnalysisYear', y].join(':');
+    return withCache_(cacheKey, 600, function() {
+      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var patientsSheet = ss.getSheetByName(PATIENTS_SHEET);
+      var reservationsSheet = ss.getSheetByName(SHEET_NAME);
+
+      var patData = getSheetValues_(patientsSheet);
+      var resData = getSheetValues_(reservationsSheet);
+      if (patData.length < 1 || resData.length < 1) {
+        return {
+          visitDistribution: {
+            '1回': 0,
+            '2-5回': 0,
+            '6-10回': 0,
+            '11-20回': 0,
+            '21回以上': 0
+          },
+          totalPatients: 0,
+          averageVisits: 0
+        };
+      }
+
+      var patHeaders = patData[0];
+      var patCol = getPatientColumnIndexes_(patHeaders);
+      var resHeaders = resData[0];
+      var resCol = getColumnIndexes_(resHeaders);
+
+      var yearStr = String(y);
+      var targetPatients = {};
+      for (var i = 1; i < resData.length; i++) {
+        var row = resData[i];
+        var dateValue = row[resCol.date];
+        if (!dateValue) continue;
+        var ym = formatYearMonth_(dateValue);
+        if (String(ym).substring(0, 4) !== yearStr) continue;
+        var patientName = row[resCol.patient] || '';
+        if (patientName) targetPatients[patientName] = true;
+      }
+
+      var targetNames = Object.keys(targetPatients);
+      if (targetNames.length === 0) {
+        return {
+          visitDistribution: {
+            '1回': 0,
+            '2-5回': 0,
+            '6-10回': 0,
+            '11-20回': 0,
+            '21回以上': 0
+          },
+          totalPatients: 0,
+          averageVisits: 0
+        };
+      }
+
+      var patientMap = {};
+      for (var p = 1; p < patData.length; p++) {
+        var prow = patData[p];
+        var name = prow[patCol.name] || '';
+        if (name) patientMap[name] = prow;
+      }
+
+      var distribution = {
+        '1回': 0,
+        '2-5回': 0,
+        '6-10回': 0,
+        '11-20回': 0,
+        '21回以上': 0
+      };
+
+      var totalPatients = 0;
+      var totalVisits = 0;
+
+      for (var t = 0; t < targetNames.length; t++) {
+        var name2 = targetNames[t];
+        var prowData = patientMap[name2];
+        var visitCount = 0;
+        if (prowData) {
+          visitCount = parseInt(prowData[patCol.visitCount]) || 0;
+        }
+        if (visitCount === 0) visitCount = 1;
+
+        totalPatients++;
+        totalVisits += visitCount;
+
+        if (visitCount === 1) {
+          distribution['1回']++;
+        } else if (visitCount <= 5) {
+          distribution['2-5回']++;
+        } else if (visitCount <= 10) {
+          distribution['6-10回']++;
+        } else if (visitCount <= 20) {
+          distribution['11-20回']++;
+        } else {
+          distribution['21回以上']++;
+        }
+      }
+
+      var avgVisits = totalPatients > 0 ? Math.round(totalVisits / totalPatients * 10) / 10 : 0;
+      return {
+        visitDistribution: distribution,
+        totalPatients: totalPatients,
+        averageVisits: avgVisits
+      };
+    });
+  } catch (error) {
+    console.error('getCustomerAnalysisForYear error:', error);
+    throw new Error('顧客分析（年次）データ取得エラー: ' + error.message);
   }
 }
 
@@ -1253,12 +1579,81 @@ function getSalesTrend(months) {
 }
 
 /**
+ * 売上トレンドデータを取得（年次・指定年の12ヶ月）
+ * @param {number} year
+ * @return {Array}
+ */
+function getSalesTrendForYear(year) {
+  try {
+    var y = parseInt(year, 10);
+    if (!y) throw new Error('年が不正です');
+
+    var cacheKey = ['salesTrendYear', y].join(':');
+    return withCache_(cacheKey, 600, function() {
+      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var sheet = ss.getSheetByName(SHEET_NAME);
+
+      var data = getSheetValues_(sheet);
+      if (data.length < 1) return [];
+      var headers = data[0];
+      var col = getColumnIndexes_(headers);
+
+      var yearStr = String(y);
+      var monthly = {};
+      for (var m = 1; m <= 12; m++) {
+        var mm = ('0' + m).slice(-2);
+        monthly[yearStr + '-' + mm] = { sales: 0, count: 0, patients: {} };
+      }
+
+      for (var i = 1; i < data.length; i++) {
+        var row = data[i];
+        var dateValue = row[col.date];
+        if (!dateValue) continue;
+
+        var ym = formatYearMonth_(dateValue);
+        if (!ym || ym.substring(0, 4) !== yearStr) continue;
+
+        var amount = parseAmount_(row[col.amount]);
+        var patient = row[col.patient] || '';
+
+        if (!monthly[ym]) {
+          monthly[ym] = { sales: 0, count: 0, patients: {} };
+        }
+        monthly[ym].sales += amount;
+        monthly[ym].count++;
+        if (patient) monthly[ym].patients[patient] = true;
+      }
+
+      var result = [];
+      for (var mo = 1; mo <= 12; mo++) {
+        var mm2 = ('0' + mo).slice(-2);
+        var key = yearStr + '-' + mm2;
+        var d = monthly[key];
+        result.push({
+          yearMonth: key,
+          sales: d.sales,
+          count: d.count,
+          uniquePatients: Object.keys(d.patients).length
+        });
+      }
+      return result;
+    });
+  } catch (error) {
+    console.error('getSalesTrendForYear error:', error);
+    throw new Error('売上トレンド（年次）取得エラー: ' + error.message);
+  }
+}
+
+/**
  * メニュー分析データを取得
  * @param {string} yearMonth - 対象年月（省略時は今月）
  * @return {Object} メニュー分析データ
  */
 function getMenuAnalysis(yearMonth) {
   try {
+    if (/^\d{4}$/.test(String(yearMonth || ''))) {
+      return getMenuAnalysisForYear(parseInt(yearMonth, 10));
+    }
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = ss.getSheetByName(SHEET_NAME);
     
@@ -1328,6 +1723,83 @@ function getMenuAnalysis(yearMonth) {
   } catch (error) {
     console.error('getMenuAnalysis error:', error);
     throw new Error('メニュー分析取得エラー: ' + error.message);
+  }
+}
+
+/**
+ * メニュー分析データを取得（年次）
+ * @param {number} year
+ * @return {Object}
+ */
+function getMenuAnalysisForYear(year) {
+  try {
+    var y = parseInt(year, 10);
+    if (!y) throw new Error('年が不正です');
+
+    var cacheKey = ['menuAnalysisYear', y].join(':');
+    return withCache_(cacheKey, 600, function() {
+      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var sheet = ss.getSheetByName(SHEET_NAME);
+
+      var data = getSheetValues_(sheet);
+      if (data.length < 1) {
+        return { byMenu: [], totalSales: 0, totalCount: 0 };
+      }
+      var headers = data[0];
+      var col = getColumnIndexes_(headers);
+
+      var yearStr = String(y);
+      var menuData = {};
+      var totalSales = 0;
+      var totalCount = 0;
+
+      for (var i = 1; i < data.length; i++) {
+        var row = data[i];
+        var dateValue = row[col.date];
+        if (!dateValue) continue;
+
+        var ym = formatYearMonth_(dateValue);
+        if (!ym || ym.substring(0, 4) !== yearStr) continue;
+
+        var menu = row[col.menu] || '未設定';
+        var amount = parseAmount_(row[col.amount]);
+
+        if (!menuData[menu]) {
+          menuData[menu] = { count: 0, amount: 0 };
+        }
+
+        menuData[menu].count++;
+        menuData[menu].amount += amount;
+        totalSales += amount;
+        totalCount++;
+      }
+
+      var byMenu = [];
+      for (var menuName in menuData) {
+        if (menuData.hasOwnProperty(menuName)) {
+          var d = menuData[menuName];
+          byMenu.push({
+            menu: menuName,
+            count: d.count,
+            amount: d.amount,
+            percentage: totalSales > 0 ? Math.round(d.amount / totalSales * 1000) / 10 : 0
+          });
+        }
+      }
+
+      byMenu.sort(function(a, b) {
+        return b.amount - a.amount;
+      });
+
+      return {
+        byMenu: byMenu,
+        totalSales: totalSales,
+        totalCount: totalCount
+      };
+    });
+  } catch (error) {
+    console.error('getMenuAnalysisForYear error:', error);
+    throw new Error('メニュー分析（年次）取得エラー: ' + error.message);
   }
 }
 

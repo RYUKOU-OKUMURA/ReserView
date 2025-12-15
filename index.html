@@ -1352,7 +1352,8 @@
         経営みえる化くん
       </div>
       <div class="header-month">
-        <select id="globalYearMonth"></select>
+        <select id="globalYear"></select>
+        <select id="globalMonth"></select>
       </div>
     </div>
     <div class="header-right">
@@ -1735,6 +1736,8 @@
     let selectedReservation = null;
     let filterOptions = { staff: [], menu: [], payment: [], status: [], yearMonths: [] };
     let currentFilters = {
+      year: '',
+      month: '',
       yearMonth: '',
       startDay: '',
       endDay: '',
@@ -1794,6 +1797,13 @@
         const initialData = await runGAS('getInitialData');
         filterOptions = initialData.filterOptions || filterOptions;
         currentFilters.yearMonth = initialData.selectedYearMonth || currentFilters.yearMonth;
+        if (currentFilters.yearMonth) {
+          const parts = String(currentFilters.yearMonth).split('-');
+          if (parts.length === 2) {
+            currentFilters.year = parts[0];
+            currentFilters.month = parts[1];
+          }
+        }
         if (currentFilters.yearMonth) {
           reservationCache[currentFilters.yearMonth] = initialData.reservations || [];
         }
@@ -1875,32 +1885,137 @@
     // フィルタ初期化
     // ========================================
     function initGlobalYearMonth() {
-      const select = document.getElementById('globalYearMonth');
-      select.innerHTML = '';
-      
-      filterOptions.yearMonths.forEach(ym => {
+      const yearSelect = document.getElementById('globalYear');
+      const monthSelect = document.getElementById('globalMonth');
+
+      yearSelect.innerHTML = '';
+      monthSelect.innerHTML = '';
+
+      const years = getGlobalAvailableYears_();
+      years.forEach(y => {
         const option = document.createElement('option');
-        option.value = ym;
-        option.textContent = formatYearMonthDisplay(ym);
-        select.appendChild(option);
+        option.value = y;
+        option.textContent = `${y}年`;
+        yearSelect.appendChild(option);
       });
 
-      // 既定の選択を優先し、なければ今月→最新
+      // 初期年（既定: currentFilters.yearMonth → 今年）
       const now = new Date();
-      const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      if (currentFilters.yearMonth && filterOptions.yearMonths.includes(currentFilters.yearMonth)) {
-        select.value = currentFilters.yearMonth;
-      } else if (filterOptions.yearMonths.includes(currentYM)) {
-        select.value = currentYM;
-        currentFilters.yearMonth = currentYM;
-      } else if (filterOptions.yearMonths.length > 0) {
-        select.value = filterOptions.yearMonths[0];
-        currentFilters.yearMonth = filterOptions.yearMonths[0];
-      }
-      
-      // CFモード用年月セレクトも初期化
+      const fallbackYear = String(now.getFullYear());
+      const ymYear = currentFilters.yearMonth ? String(currentFilters.yearMonth).split('-')[0] : '';
+      const initialYear = years.includes(ymYear) ? ymYear : (years.includes(fallbackYear) ? fallbackYear : (years[0] || fallbackYear));
+      currentFilters.year = initialYear;
+      yearSelect.value = initialYear;
+
+      initGlobalMonthOptions_();
+      updateGlobalMonthAllAvailability_();
+
+      // CFモード用年月セレクトも初期化（既存仕様維持）
       initCFYearMonth();
       initCFYearOptions();
+    }
+
+    function getGlobalAvailableYears_() {
+      const years = new Set();
+      (filterOptions.yearMonths || []).forEach(ym => {
+        const y = String(ym).split('-')[0];
+        if (y) years.add(y);
+      });
+      const list = Array.from(years).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+      if (list.length === 0) list.push(String(new Date().getFullYear()));
+      return list;
+    }
+
+    function getYearMonthsForYear_(year) {
+      const y = String(year || '');
+      return (filterOptions.yearMonths || []).filter(ym => String(ym).startsWith(y + '-'));
+    }
+
+    function getDefaultMonthForYear_(year) {
+      const y = String(year || '');
+      const monthsForYear = getYearMonthsForYear_(y); // 例: ["2026-02","2026-01"...] (降順)
+      const now = new Date();
+      const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+      const currentYM = `${now.getFullYear()}-${currentMonth}`;
+
+      // 現在選択の月がその年に存在すれば優先
+      if (currentFilters.yearMonth) {
+        const parts = String(currentFilters.yearMonth).split('-');
+        if (parts.length === 2 && parts[0] === y) {
+          const m = parts[1];
+          if (monthsForYear.some(ym => ym === `${y}-${m}`)) return m;
+        }
+      }
+
+      // 対象年が今年で、その月が存在すれば優先
+      if (String(now.getFullYear()) === y && monthsForYear.some(ym => ym === currentYM)) {
+        return currentMonth;
+      }
+
+      // 最新月（その年のデータがある場合）
+      if (monthsForYear.length > 0) {
+        return String(monthsForYear[0]).split('-')[1] || '01';
+      }
+
+      // データがない年は今月を既定にする
+      return currentMonth;
+    }
+
+    function initGlobalMonthOptions_() {
+      const yearSelect = document.getElementById('globalYear');
+      const monthSelect = document.getElementById('globalMonth');
+      const year = yearSelect.value;
+
+      monthSelect.innerHTML = '';
+
+      // 「すべて」は先頭に追加（経理で年次表示）
+      const allOpt = document.createElement('option');
+      allOpt.value = 'all';
+      allOpt.textContent = 'すべて';
+      monthSelect.appendChild(allOpt);
+
+      // 選択可能な月（データがある月だけ）
+      const monthsForYear = getYearMonthsForYear_(year);
+      const monthValues = monthsForYear
+        .map(ym => String(ym).split('-')[1])
+        .filter(m => !!m);
+
+      // 降順（今までのglobalYearMonthと同じ並び）
+      let uniqueMonths = Array.from(new Set(monthValues)).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+      if (uniqueMonths.length === 0) {
+        uniqueMonths = Array.from({ length: 12 }, (_, i) => String(12 - i).padStart(2, '0'));
+      }
+      uniqueMonths.forEach(m => {
+        const option = document.createElement('option');
+        option.value = m;
+        option.textContent = `${parseInt(m, 10)}月`;
+        monthSelect.appendChild(option);
+      });
+
+      // 既定の月（保持→今月→最新）
+      const currentMonth = currentFilters.month;
+      if (currentMonth === 'all') {
+        monthSelect.value = 'all';
+      } else if (currentMonth && uniqueMonths.includes(currentMonth)) {
+        monthSelect.value = currentMonth;
+      } else {
+        const def = getDefaultMonthForYear_(year);
+        currentFilters.month = def;
+        monthSelect.value = uniqueMonths.includes(def) ? def : (uniqueMonths[0] || def);
+      }
+
+      // yearMonth（分析/CF等の月次処理用）を整合させる
+      const selectedMonth = monthSelect.value === 'all' ? getDefaultMonthForYear_(year) : monthSelect.value;
+      currentFilters.yearMonth = `${year}-${String(selectedMonth).padStart(2, '0')}`;
+    }
+
+    function updateGlobalMonthAllAvailability_() {
+      const monthSelect = document.getElementById('globalMonth');
+      if (!monthSelect) return;
+
+      const allOpt = Array.from(monthSelect.options).find(opt => opt.value === 'all');
+      if (!allOpt) return;
+      allOpt.disabled = false;
     }
 
     function initCFYearMonth() {
@@ -1988,23 +2103,54 @@
     // イベントリスナー
     // ========================================
     function initEventListeners() {
-      // グローバル年月変更
-      document.getElementById('globalYearMonth').addEventListener('change', async function() {
-        const ym = this.value;
-        currentFilters.yearMonth = ym;
-        syncCFYearMonth(ym);
+      // グローバル「年」「月」変更
+      document.getElementById('globalYear').addEventListener('change', async function() {
+        currentFilters.year = this.value;
+        initGlobalMonthOptions_();
+        updateGlobalMonthAllAvailability_();
+        syncCFYearMonth(currentFilters.yearMonth);
+        syncCFWithGlobalPeriod_();
         loadAnnualSalesHeader();
-        await loadReservations();
-        
-        // 分析モードの場合は分析データも更新
+        if (currentMode === 'accounting') {
+          await loadReservations();
+        }
         if (currentMode === 'analysis') {
           await loadAnalysisData();
           if (currentSubTab !== 'dashboard') {
             await loadSubTabData(currentSubTab);
           }
         }
-        // CFモードの場合はCFデータも更新
         if (currentMode === 'cashflow') {
+          syncCFWithGlobalPeriod_();
+          await loadCFData();
+        }
+      });
+
+      document.getElementById('globalMonth').addEventListener('change', async function() {
+        const year = document.getElementById('globalYear').value;
+        currentFilters.year = year;
+        currentFilters.month = this.value;
+
+        updateGlobalMonthAllAvailability_();
+
+        const monthForYm = currentFilters.month === 'all' ? getDefaultMonthForYear_(year) : currentFilters.month;
+        currentFilters.yearMonth = `${year}-${String(monthForYm).padStart(2, '0')}`;
+
+        syncCFYearMonth(currentFilters.yearMonth);
+        syncCFWithGlobalPeriod_();
+        loadAnnualSalesHeader();
+        if (currentMode === 'accounting') {
+          await loadReservations();
+        }
+
+        if (currentMode === 'analysis') {
+          await loadAnalysisData();
+          if (currentSubTab !== 'dashboard') {
+            await loadSubTabData(currentSubTab);
+          }
+        }
+        if (currentMode === 'cashflow') {
+          syncCFWithGlobalPeriod_();
           await loadCFData();
         }
       });
@@ -2144,7 +2290,9 @@
     // モード切替
     // ========================================
     function switchMode(mode, updateHash = true) {
+      const prevMode = currentMode;
       currentMode = mode;
+      updateGlobalMonthAllAvailability_();
       
       // タブのアクティブ状態を更新
       document.querySelectorAll('.mode-tab').forEach(tab => {
@@ -2158,6 +2306,7 @@
       
       if (mode === 'accounting') {
         document.getElementById('accountingMode').classList.add('active');
+        if (prevMode !== 'accounting') loadReservations();
       } else if (mode === 'analysis') {
         document.getElementById('analysisMode').classList.add('active');
         loadAnalysisData();
@@ -2195,7 +2344,7 @@
     // ========================================
     async function loadReservations(options = {}) {
       const { preserveSelection = false } = options;
-      const ym = currentFilters.yearMonth;
+      const ym = getAccountingYearMonthKey_();
       const prevSelectedRow = preserveSelection && selectedReservation ? selectedReservation.rowIndex : null;
       const needsFetch = ym && !reservationCache[ym];
       if (needsFetch) showLoading();
@@ -2242,7 +2391,15 @@
     }
 
     function matchesFiltersLocal(record) {
-      if (currentFilters.yearMonth && record.yearMonth !== currentFilters.yearMonth) return false;
+      const ymKey = getAccountingYearMonthKey_();
+      if (ymKey) {
+        const yearOnly = /^\d{4}$/.test(String(ymKey));
+        if (yearOnly) {
+          if (String(record.yearMonth || '').substring(0, 4) !== String(ymKey)) return false;
+        } else {
+          if (String(record.yearMonth || '') !== String(ymKey)) return false;
+        }
+      }
 
       const startDay = parseInt(currentFilters.startDay) || 0;
       const endDay = parseInt(currentFilters.endDay) || 0;
@@ -2393,8 +2550,7 @@
 
     async function loadAnnualSalesHeader() {
       try {
-        const ym = currentFilters.yearMonth;
-        const year = ym ? ym.split('-')[0] : String(new Date().getFullYear());
+        const year = currentFilters.year ? String(currentFilters.year) : String(new Date().getFullYear());
         if (annualSalesCache[year] !== undefined) {
           document.getElementById('headerAnnual').textContent = `年累計 ¥${annualSalesCache[year].toLocaleString()}`;
           return;
@@ -2591,13 +2747,18 @@
         
         // ローカルキャッシュを更新
         selectedReservation = { ...selectedReservation, ...updates };
-        const ym = currentFilters.yearMonth;
-        if (ym && reservationCache[ym]) {
-          const idx = reservationCache[ym].findIndex(r => r.rowIndex === selectedReservation.rowIndex);
-          if (idx !== -1) {
-            reservationCache[ym][idx] = { ...reservationCache[ym][idx], ...updates };
+        const cacheKeys = new Set();
+        const ymKey = getAccountingYearMonthKey_();
+        if (ymKey) cacheKeys.add(ymKey);
+        if (selectedReservation.yearMonth) cacheKeys.add(selectedReservation.yearMonth);
+        cacheKeys.forEach(key => {
+          if (reservationCache[key]) {
+            const idx = reservationCache[key].findIndex(r => r.rowIndex === selectedReservation.rowIndex);
+            if (idx !== -1) {
+              reservationCache[key][idx] = { ...reservationCache[key][idx], ...updates };
+            }
           }
-        }
+        });
 
         // 集計・表示を再計算（選択は維持）
         await loadReservations({ preserveSelection: true });
@@ -2612,23 +2773,37 @@
     // ========================================
     // 分析モード：データ取得・表示
     // ========================================
+    function getSelectedPeriod_() {
+      const year = String(currentFilters.year || (currentFilters.yearMonth ? String(currentFilters.yearMonth).split('-')[0] : new Date().getFullYear()));
+      if (currentFilters.month === 'all') {
+        return { type: 'year', year: year, key: year };
+      }
+      const ym = currentFilters.yearMonth || `${year}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+      return { type: 'month', year: year, yearMonth: ym, key: ym };
+    }
+
     async function loadAnalysisData() {
       showLoading();
       try {
         await ensureChartJs();
-        const yearMonth = currentFilters.yearMonth;
-        let bundle = analysisCache[yearMonth]?.bundle;
+        const period = getSelectedPeriod_();
+        let bundle = analysisCache[period.key]?.bundle;
         
         if (!bundle) {
-          bundle = await runGAS('getAnalysisBundle', yearMonth);
-          analysisCache[yearMonth] = { bundle };
+          if (period.type === 'year') {
+            bundle = await runGAS('getAnalysisBundleForYear', parseInt(period.year, 10));
+          } else {
+            bundle = await runGAS('getAnalysisBundle', period.yearMonth);
+          }
+          analysisCache[period.key] = { bundle };
         }
         // トレンドはサブタブでも使うのでキャッシュ
         if (bundle?.trend) {
-          analysisSubCache.sales[yearMonth] = bundle.trend;
+          analysisSubCache.sales[period.key] = bundle.trend;
         }
         
-        renderKPIs(bundle.summary);
+        renderKPIs(bundle.summary, period);
+        updateHeaderFromAnalysis_(bundle.summary, period);
         renderSalesChart(bundle.trend);
         renderChurnTable(bundle.churnList);
       } catch (error) {
@@ -2643,27 +2818,39 @@
       showLoading();
       try {
         await ensureChartJs();
-        const yearMonth = currentFilters.yearMonth;
+        const period = getSelectedPeriod_();
         
         if (sub === 'customers') {
-          let data = analysisSubCache.customers[yearMonth];
+          let data = analysisSubCache.customers[period.key];
           if (!data) {
-            data = await runGAS('getCustomerAnalysis', yearMonth);
-            analysisSubCache.customers[yearMonth] = data;
+            if (period.type === 'year') {
+              data = await runGAS('getCustomerAnalysisForYear', parseInt(period.year, 10));
+            } else {
+              data = await runGAS('getCustomerAnalysis', period.yearMonth);
+            }
+            analysisSubCache.customers[period.key] = data;
           }
           renderCustomerAnalysis(data);
         } else if (sub === 'sales') {
-          let trend = analysisCache[yearMonth]?.bundle?.trend || analysisSubCache.sales[yearMonth];
+          let trend = analysisCache[period.key]?.bundle?.trend || analysisSubCache.sales[period.key];
           if (!trend) {
-            trend = await runGAS('getSalesTrend', 12);
-            analysisSubCache.sales[yearMonth] = trend;
+            if (period.type === 'year') {
+              trend = await runGAS('getSalesTrendForYear', parseInt(period.year, 10));
+            } else {
+              trend = await runGAS('getSalesTrend', 12);
+            }
+            analysisSubCache.sales[period.key] = trend;
           }
           renderSalesTrendCharts(trend);
         } else if (sub === 'menu') {
-          let data = analysisSubCache.menu[yearMonth];
+          let data = analysisSubCache.menu[period.key];
           if (!data) {
-            data = await runGAS('getMenuAnalysis', yearMonth);
-            analysisSubCache.menu[yearMonth] = data;
+            if (period.type === 'year') {
+              data = await runGAS('getMenuAnalysisForYear', parseInt(period.year, 10));
+            } else {
+              data = await runGAS('getMenuAnalysis', period.yearMonth);
+            }
+            analysisSubCache.menu[period.key] = data;
           }
           renderMenuAnalysis(data);
         }
@@ -2675,31 +2862,37 @@
       }
     }
 
-    function renderKPIs(summary) {
+    function renderKPIs(summary, period) {
       const grid = document.getElementById('kpiGrid');
       
       const salesChange = summary.comparison.salesRate;
       const salesChangeClass = salesChange >= 0 ? 'positive' : 'negative';
       const salesChangeIcon = salesChange >= 0 ? '↑' : '↓';
+
+      const isYear = period && period.type === 'year';
+      const title = isYear ? `${period.year}年売上` : '今月売上';
+      const compareLabel = isYear ? `${parseInt(period.year, 10) - 1}年比` : '前月比';
+      const visitHelp = isYear ? `${period.year}年来院者のうち` : '今月来院者のうち';
+      const current = isYear ? summary.currentYear : summary.currentMonth;
       
       grid.innerHTML = `
         <div class="kpi-card">
-          <div class="kpi-label">今月売上</div>
-          <div class="kpi-value">¥${summary.currentMonth.sales.toLocaleString()}</div>
+          <div class="kpi-label">${title}</div>
+          <div class="kpi-value">¥${current.sales.toLocaleString()}</div>
           <div class="kpi-sub">
-            前月比
+            ${compareLabel}
             <span class="kpi-change ${salesChangeClass}">${salesChangeIcon} ${Math.abs(salesChange).toFixed(1)}%</span>
           </div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">来院数</div>
-          <div class="kpi-value">${summary.currentMonth.count}件</div>
-          <div class="kpi-sub">${summary.currentMonth.uniquePatients}名</div>
+          <div class="kpi-value">${current.count}件</div>
+          <div class="kpi-sub">${current.uniquePatients}名</div>
         </div>
         <div class="kpi-card success">
           <div class="kpi-label">リピート率</div>
           <div class="kpi-value">${summary.repeatRate}%</div>
-          <div class="kpi-sub">今月来院者のうち</div>
+          <div class="kpi-sub">${visitHelp}</div>
         </div>
         <div class="kpi-card warning">
           <div class="kpi-label">離反予備軍</div>
@@ -2712,6 +2905,14 @@
           <div class="kpi-sub">180日以上未来院</div>
         </div>
       `;
+    }
+
+    function updateHeaderFromAnalysis_(summary, period) {
+      const isYear = period && period.type === 'year';
+      const current = isYear ? summary.currentYear : summary.currentMonth;
+      if (!current) return;
+      document.getElementById('headerAmount').textContent = '¥' + (current.sales || 0).toLocaleString();
+      document.getElementById('headerCount').textContent = (current.count || 0) + '件';
     }
 
     function renderSalesChart(trend) {
@@ -3033,6 +3234,8 @@
     async function loadCFData() {
       showLoading();
       try {
+        // グローバル選択（月=すべて → 年次）に追従
+        syncCFWithGlobalPeriod_();
         syncCFPeriodUI();
 
         const periodType = document.getElementById('cfPeriodType').value || 'month';
@@ -3044,6 +3247,7 @@
           const yearly = await runGAS('getYearlyCashFlow', year, mode);
 
           setSalesInputValue(yearly.sales || 0, { readOnly: mode !== 'plan' });
+          updateHeaderFromCF_(yearly.sales || 0);
           document.getElementById('inputVariable').value = yearly.variable || 0;
           document.getElementById('inputLabor').value = yearly.labor || 0;
           document.getElementById('inputOtherFixed').value = yearly.otherFixed || 0;
@@ -3071,6 +3275,7 @@
           monthlySalesCache[yearMonth] = sales;
         }
         setSalesInputValue(sales, { readOnly: true });
+        updateHeaderFromCF_(sales);
 
         // 経費データを取得（あれば）
         const expenses = await runGAS('getExpenses', yearMonth);
@@ -3119,6 +3324,34 @@
         const hasYear = Array.from(cfYearSelect.options).some(opt => opt.value === year);
         if (hasYear) cfYearSelect.value = year;
       }
+    }
+
+    function syncCFWithGlobalPeriod_() {
+      const periodTypeEl = document.getElementById('cfPeriodType');
+      const yearEl = document.getElementById('cfYear');
+      const yearMonthEl = document.getElementById('cfYearMonth');
+      if (!periodTypeEl || !yearEl || !yearMonthEl) return;
+
+      const year = String(currentFilters.year || (currentFilters.yearMonth ? String(currentFilters.yearMonth).split('-')[0] : new Date().getFullYear()));
+      if (currentFilters.month === 'all') {
+        periodTypeEl.value = 'year';
+        const hasYear = Array.from(yearEl.options).some(opt => opt.value === year);
+        if (hasYear) yearEl.value = year;
+        return;
+      }
+
+      periodTypeEl.value = 'month';
+      if (currentFilters.yearMonth) {
+        const hasYm = Array.from(yearMonthEl.options).some(opt => opt.value === currentFilters.yearMonth);
+        if (hasYm) yearMonthEl.value = currentFilters.yearMonth;
+      }
+      const hasYear = Array.from(yearEl.options).some(opt => opt.value === year);
+      if (hasYear) yearEl.value = year;
+    }
+
+    function updateHeaderFromCF_(sales) {
+      document.getElementById('headerAmount').textContent = '¥' + (parseInt(sales, 10) || 0).toLocaleString();
+      document.getElementById('headerCount').textContent = '—';
     }
 
     function calculateCashFlow() {
@@ -3323,6 +3556,12 @@
     function formatYearMonthDisplay(ym) {
       const parts = ym.split('-');
       return parts[0] + '年' + parseInt(parts[1]) + '月';
+    }
+
+    function getAccountingYearMonthKey_() {
+      const year = currentFilters.year || (currentFilters.yearMonth ? String(currentFilters.yearMonth).split('-')[0] : '');
+      if (currentFilters.month === 'all') return String(year || '');
+      return currentFilters.yearMonth || '';
     }
   </script>
 </body>
