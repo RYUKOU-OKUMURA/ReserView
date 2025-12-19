@@ -10,7 +10,7 @@
 // ========================================
 // 設定
 // ========================================
-var SPREADSHEET_ID = '1z-OuS5riqLp8PYKECOnPzjBWPjgvUa6KKg5c4Ne-g08';
+var SPREADSHEET_ID = 'ここにIDを入力';
 var SHEET_NAME = 'Reservations';
 var PATIENTS_SHEET = 'Patients';
 var EXPENSES_SHEET = 'Expenses';  // Phase 3で使用
