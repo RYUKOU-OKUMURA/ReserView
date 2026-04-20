@@ -10,7 +10,7 @@
 // ========================================
 // 設定
 // ========================================
-var SPREADSHEET_ID = 'ここにIDを入力';
+var SPREADSHEET_ID = '1mB_iNBgxV97TzKp3n9nReBRdZhUzLONN3RTi8HIXp1k';
 var SHEET_NAME = 'Reservations';
 var PATIENTS_SHEET = 'Patients';
 var EXPENSES_SHEET = 'Expenses';  // Phase 3で使用
@@ -47,39 +47,198 @@ function getSheetValues_(sheet) {
 /**
  * シートのヘッダーインデックスを取得
  */
-function getColumnIndexes_(headers) {
-  return {
-    date: headers.indexOf('日付'),
-    start: headers.indexOf('開始'),
-    end: headers.indexOf('終了'),
-    patient: headers.indexOf('患者名'),
-    menu: headers.indexOf('メニュー'),
-    amount: headers.indexOf('金額'),
-    staff: headers.indexOf('担当'),
-    payment: headers.indexOf('決済方法'),
-    memo: headers.indexOf('メモ'),
-    status: headers.indexOf('ステータス'),
-    id: headers.indexOf('ID'),
-    lane: headers.indexOf('レーン')
+function normalizeHeaderLabel_(value) {
+  return String(value === null || value === undefined ? '' : value)
+    .replace(/[\s\u3000]+/g, '');
+}
+
+function buildHeaderIndexMap_(headers) {
+  var headerMap = {};
+  for (var i = 0; i < headers.length; i++) {
+    var normalized = normalizeHeaderLabel_(headers[i]);
+    if (normalized && !headerMap.hasOwnProperty(normalized)) {
+      headerMap[normalized] = i;
+    }
+  }
+  return headerMap;
+}
+
+function getHeaderIndex_(headerMap, headerLabel) {
+  var normalized = normalizeHeaderLabel_(headerLabel);
+  return headerMap.hasOwnProperty(normalized) ? headerMap[normalized] : -1;
+}
+
+function getHeaderIndexByCandidates_(headerMap, candidates) {
+  for (var i = 0; i < candidates.length; i++) {
+    var index = getHeaderIndex_(headerMap, candidates[i]);
+    if (index >= 0) return index;
+  }
+  return -1;
+}
+
+function isReservationDateValue_(value) {
+  if (!value) return false;
+
+  if (value instanceof Date) {
+    var year = value.getFullYear();
+    return year >= 2000 && year <= 2100;
+  }
+
+  if (typeof value === 'string') {
+    var trimmed = value.trim();
+    return /^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}$/.test(trimmed);
+  }
+
+  return false;
+}
+
+function inferReservationDateIndex_(headers, rows, reservedIndexes) {
+  if (!rows || rows.length === 0 || !headers || headers.length === 0) return -1;
+
+  var sampleLimit = Math.min(rows.length, 20);
+  var bestIndex = -1;
+  var bestScore = 0;
+
+  for (var colIndex = 0; colIndex < headers.length; colIndex++) {
+    if (reservedIndexes.indexOf(colIndex) !== -1) continue;
+
+    var score = 0;
+    for (var rowIndex = 0; rowIndex < sampleLimit; rowIndex++) {
+      var row = rows[rowIndex] || [];
+      if (isReservationDateValue_(row[colIndex])) {
+        score++;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = colIndex;
+    }
+  }
+
+  return bestScore >= 2 ? bestIndex : -1;
+}
+
+function getFallbackReservationDateIndex_(headers, reservedIndexes) {
+  if (!headers || headers.length === 0) return -1;
+  if (reservedIndexes.indexOf(0) !== -1) return -1;
+
+  var firstHeader = normalizeHeaderLabel_(headers[0]);
+  if (firstHeader === '' || firstHeader === '0' || firstHeader === '日') {
+    return 0;
+  }
+
+  return -1;
+}
+
+function getColumnIndexes_(headers, rows) {
+  var headerMap = buildHeaderIndexMap_(headers);
+  var col = {
+    date: getHeaderIndexByCandidates_(headerMap, ['日付', '予約日', '来院日']),
+    start: getHeaderIndex_(headerMap, '開始'),
+    end: getHeaderIndex_(headerMap, '終了'),
+    patient: getHeaderIndexByCandidates_(headerMap, ['患者名', '顧客名']),
+    menu: getHeaderIndex_(headerMap, 'メニュー'),
+    amount: getHeaderIndex_(headerMap, '金額'),
+    staff: getHeaderIndex_(headerMap, '担当'),
+    payment: getHeaderIndexByCandidates_(headerMap, ['決済方法', '支払方法']),
+    memo: getHeaderIndex_(headerMap, 'メモ'),
+    status: getHeaderIndexByCandidates_(headerMap, ['ステータス', '状態']),
+    id: getHeaderIndexByCandidates_(headerMap, ['ID', '予約ID']),
+    lane: getHeaderIndexByCandidates_(headerMap, ['レーン', 'Lane'])
   };
+
+  if (col.date < 0) {
+    var reservedIndexes = [
+      col.start,
+      col.end,
+      col.patient,
+      col.menu,
+      col.amount,
+      col.staff,
+      col.payment,
+      col.memo,
+      col.status,
+      col.id,
+      col.lane
+    ].filter(function(index) {
+      return index >= 0;
+    });
+
+    col.date = getFallbackReservationDateIndex_(headers, reservedIndexes);
+    if (col.date < 0) {
+      col.date = inferReservationDateIndex_(headers, rows, reservedIndexes);
+    }
+  }
+
+  return col;
 }
 
 /**
  * Patientsシートのヘッダーインデックスを取得
  */
 function getPatientColumnIndexes_(headers) {
+  var headerMap = buildHeaderIndexMap_(headers);
   return {
-    id: headers.indexOf('患者ID'),
-    name: headers.indexOf('患者名'),
-    furigana: headers.indexOf('フリガナ'),
-    gender: headers.indexOf('性別'),
-    phone: headers.indexOf('電話番号'),
-    memo: headers.indexOf('メモ'),
-    firstVisit: headers.indexOf('初回来院日'),
-    lastVisit: headers.indexOf('最終来院日'),
-    visitCount: headers.indexOf('来院回数'),
-    totalAmount: headers.indexOf('総支払額')
+    id: getHeaderIndex_(headerMap, '患者ID'),
+    name: getHeaderIndex_(headerMap, '患者名'),
+    furigana: getHeaderIndex_(headerMap, 'フリガナ'),
+    gender: getHeaderIndex_(headerMap, '性別'),
+    phone: getHeaderIndex_(headerMap, '電話番号'),
+    memo: getHeaderIndex_(headerMap, 'メモ'),
+    firstVisit: getHeaderIndex_(headerMap, '初回来院日'),
+    lastVisit: getHeaderIndex_(headerMap, '最終来院日'),
+    visitCount: getHeaderIndex_(headerMap, '来院回数'),
+    totalAmount: getHeaderIndex_(headerMap, '総支払額')
   };
+}
+
+function hasCellValue_(row, index) {
+  if (index < 0) return false;
+  var value = row[index];
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') {
+    return normalizeHeaderLabel_(value) !== '';
+  }
+  return value !== '';
+}
+
+function formatHeaderList_(headers) {
+  return headers
+    .map(function(header) {
+      return String(header === null || header === undefined ? '' : header).trim();
+    })
+    .filter(function(header) {
+      return header !== '';
+    })
+    .join(', ');
+}
+
+function assertReservationSheetSchema_(headers, col, rows) {
+  var missing = [];
+
+  if (col.date < 0) missing.push('日付');
+  if (col.amount < 0) missing.push('金額');
+  if (col.patient < 0 && col.id < 0) missing.push('患者名 または ID');
+
+  if (missing.length > 0) {
+    throw new Error(
+      'Reservationsシートの列名が一致しません。不足: ' + missing.join(', ') +
+      (headers.length ? ' / 実際のヘッダ: ' + formatHeaderList_(headers) : '')
+    );
+  }
+
+  if (!rows || rows.length === 0) return;
+
+  for (var i = 0; i < rows.length; i++) {
+    if (hasCellValue_(rows[i], col.patient) || hasCellValue_(rows[i], col.id)) {
+      return;
+    }
+  }
+
+  throw new Error(
+    'Reservationsシートのデータ行を読み取れません。`患者名` または `ID` 列の値が空か、列名がずれています。'
+  );
 }
 
 /**
@@ -215,7 +374,8 @@ function getFilterOptions() {
       return { staff: [], menu: [], payment: [], status: [], yearMonths: [] };
     }
     var headers = data[0];
-    var col = getColumnIndexes_(headers);
+    var col = getColumnIndexes_(headers, data.slice(1));
+    assertReservationSheetSchema_(headers, col, data.slice(1));
     
     var staffSet = {};
     var menuSet = {};
@@ -273,7 +433,8 @@ function getInitialData(yearMonth) {
     }
 
     var headers = data[0];
-    var col = getColumnIndexes_(headers);
+    var col = getColumnIndexes_(headers, data.slice(1));
+    assertReservationSheetSchema_(headers, col, data.slice(1));
     var staffSet = {};
     var menuSet = {};
     var paymentSet = {};
@@ -370,9 +531,10 @@ function getReservations(filters) {
     if (data.length < 2) {
       return { reservations: [], summary: createEmptySummary_() };
     }
-    
+
     var headers = data[0];
-    var col = getColumnIndexes_(headers);
+    var col = getColumnIndexes_(headers, data.slice(1));
+    assertReservationSheetSchema_(headers, col, data.slice(1));
     
     var reservations = [];
     
@@ -597,7 +759,7 @@ function updateReservation(rowIndex, updates) {
   try {
     var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var col = getColumnIndexes_(headers);
+    var col = getColumnIndexes_(headers, []);
     
     var fieldMap = {
       amount: col.amount,
@@ -674,7 +836,7 @@ function getAnalysisBundle(yearMonth, months) {
       }
 
       var resHeaders = resData[0];
-      var resCol = getColumnIndexes_(resHeaders);
+      var resCol = getColumnIndexes_(resHeaders, resData.slice(1));
 
       var patHeaders = patData[0] || [];
       var patCol = patHeaders.length ? getPatientColumnIndexes_(patHeaders) : {};
@@ -892,7 +1054,7 @@ function getAnalysisBundleForYear(year, months) {
       }
 
       var resHeaders = resData[0];
-      var resCol = getColumnIndexes_(resHeaders);
+      var resCol = getColumnIndexes_(resHeaders, resData.slice(1));
 
       var patHeaders = patData[0] || [];
       var patCol = patHeaders.length ? getPatientColumnIndexes_(patHeaders) : {};
@@ -1132,7 +1294,7 @@ function getAnalysisSummary(yearMonth) {
       };
     }
     var resHeaders = resData[0];
-    var resCol = getColumnIndexes_(resHeaders);
+    var resCol = getColumnIndexes_(resHeaders, resData.slice(1));
     
     // 患者データを取得
     var patData = getSheetValues_(patientsSheet);
@@ -1295,7 +1457,7 @@ function getCustomerAnalysis(yearMonth) {
     var patHeaders = patData[0];
     var patCol = getPatientColumnIndexes_(patHeaders);
     var resHeaders = resData[0];
-    var resCol = getColumnIndexes_(resHeaders);
+    var resCol = getColumnIndexes_(resHeaders, resData.slice(1));
     
     // 対象年月に来院した患者のみを抽出
     var targetYM = yearMonth || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM');
@@ -1427,7 +1589,7 @@ function getCustomerAnalysisForYear(year) {
       var patHeaders = patData[0];
       var patCol = getPatientColumnIndexes_(patHeaders);
       var resHeaders = resData[0];
-      var resCol = getColumnIndexes_(resHeaders);
+      var resCol = getColumnIndexes_(resHeaders, resData.slice(1));
 
       var yearStr = String(y);
       var targetPatients = {};
@@ -1586,7 +1748,7 @@ function getSalesTrend(months) {
       return [];
     }
     var headers = data[0];
-    var col = getColumnIndexes_(headers);
+    var col = getColumnIndexes_(headers, data.slice(1));
     
     months = months || 12;
     
@@ -1665,7 +1827,7 @@ function getSalesTrendForYear(year) {
       var data = getSheetValues_(sheet);
       if (data.length < 1) return [];
       var headers = data[0];
-      var col = getColumnIndexes_(headers);
+      var col = getColumnIndexes_(headers, data.slice(1));
 
       var yearStr = String(y);
       var monthly = {};
@@ -1731,7 +1893,7 @@ function getMenuAnalysis(yearMonth) {
       return { byMenu: [], totalSales: 0, totalCount: 0 };
     }
     var headers = data[0];
-    var col = getColumnIndexes_(headers);
+    var col = getColumnIndexes_(headers, data.slice(1));
     
     // 対象年月がなければ今月を使用
     if (!yearMonth) {
@@ -1815,7 +1977,7 @@ function getMenuAnalysisForYear(year) {
         return { byMenu: [], totalSales: 0, totalCount: 0 };
       }
       var headers = data[0];
-      var col = getColumnIndexes_(headers);
+      var col = getColumnIndexes_(headers, data.slice(1));
 
       var yearStr = String(y);
       var menuData = {};
@@ -2004,7 +2166,7 @@ function getMonthlySales(yearMonth) {
         return 0;
       }
       var headers = data[0];
-      var col = getColumnIndexes_(headers);
+      var col = getColumnIndexes_(headers, data.slice(1));
       
       var totalSales = 0;
       
@@ -2043,7 +2205,7 @@ function getYearlySales(year) {
       return 0;
     }
     var headers = data[0];
-    var col = getColumnIndexes_(headers);
+    var col = getColumnIndexes_(headers, data.slice(1));
     
     var totalSales = 0;
     
@@ -2137,7 +2299,7 @@ function exportSalesSummary(startYearMonth, endYearMonth) {
     }
 
     var headers = data[0] || [];
-    var col = headers.length ? getColumnIndexes_(headers) : {};
+    var col = headers.length ? getColumnIndexes_(headers, data.slice(1)) : {};
 
     var ymSet = {};
     for (var i = 0; i < yms.length; i++) ymSet[yms[i]] = true;
