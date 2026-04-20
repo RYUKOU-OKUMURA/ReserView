@@ -1615,8 +1615,8 @@
           <div class="filter-row">
             <input type="text" class="search-input" id="searchInput" placeholder="患者名で検索...">
             <div class="quick-filters">
-              <button class="quick-btn" data-status="確定">確定のみ</button>
-              <button class="quick-btn" data-status="完了">完了のみ</button>
+              <button class="quick-btn" data-status="予約確定">予約確定のみ</button>
+              <button class="quick-btn" data-status="来院済み">来院済みのみ</button>
             </div>
           </div>
         </div>
@@ -2068,6 +2068,26 @@
 
     function showUserError(message) {
       alert(message);
+    }
+
+    function normalizeReservationStatusLabel_(status) {
+      const value = String(status || '').trim();
+      if (!value) return '';
+      if (value === '確定' || value === '予約確定') return '予約確定';
+      if (value === '完了' || value === '来院済み' || value === '来院済') return '来院済み';
+      if (value === 'キャンセル' || value === '取消' || value === 'キャンセル済み') return 'キャンセル';
+      return value;
+    }
+
+    function isIncludedReservationStatus_(status) {
+      return normalizeReservationStatusLabel_(status) !== 'キャンセル';
+    }
+
+    function getReservationStatusClass_(status) {
+      const normalized = normalizeReservationStatusLabel_(status);
+      if (normalized === '来院済み') return 'completed';
+      if (normalized === 'キャンセル') return 'cancelled';
+      return 'confirmed';
     }
 
     function getDiagnosticStatusLabel_(status) {
@@ -2676,7 +2696,11 @@
       if (startDay && record.day < startDay) return false;
       if (endDay && record.day > endDay) return false;
 
-      if (currentFilters.status && currentFilters.status !== 'all' && record.status !== currentFilters.status) return false;
+      if (
+        currentFilters.status &&
+        currentFilters.status !== 'all' &&
+        normalizeReservationStatusLabel_(record.status) !== normalizeReservationStatusLabel_(currentFilters.status)
+      ) return false;
       if (currentFilters.staff && currentFilters.staff !== 'all' && record.staff !== currentFilters.staff) return false;
       if (currentFilters.payment && currentFilters.payment !== 'all' && record.payment !== currentFilters.payment) return false;
       if (currentFilters.menu && currentFilters.menu !== 'all' && record.menu !== currentFilters.menu) return false;
@@ -2717,9 +2741,13 @@
 
     function calculateLocalSummary(resList) {
       const summary = createEmptySummaryLocal();
-      summary.totalCount = resList.length;
 
       resList.forEach(r => {
+        if (!isIncludedReservationStatus_(r.status)) {
+          return;
+        }
+
+        summary.totalCount += 1;
         summary.totalAmount += r.amount;
 
         if (summary.byPayment.hasOwnProperty(r.payment)) {
@@ -2873,6 +2901,8 @@
         `;
         return;
       }
+      const statusLabel = normalizeReservationStatusLabel_(r.status);
+      const statusClass = getReservationStatusClass_(statusLabel);
       
       panel.innerHTML = `
         <div class="detail-panel">
@@ -2882,7 +2912,7 @@
           </div>
           <div class="panel-chips">
             <span class="panel-chip chip-amount">¥${(r.amount || 0).toLocaleString()}</span>
-            <span class="panel-chip chip-status-${r.status === '完了' ? 'completed' : r.status === 'キャンセル' ? 'cancelled' : 'confirmed'}">${r.status}</span>
+            <span class="panel-chip chip-status-${statusClass}">${statusLabel}</span>
             ${r.payment ? `<span class="panel-chip">${r.payment}</span>` : ''}
           </div>
           <div class="panel-content">
@@ -2916,9 +2946,9 @@
               <div class="form-group">
                 <label class="form-label">ステータス</label>
                 <select class="form-select" id="editStatus">
-                  <option value="確定" ${r.status === '確定' ? 'selected' : ''}>確定</option>
-                  <option value="完了" ${r.status === '完了' ? 'selected' : ''}>完了</option>
-                  <option value="キャンセル" ${r.status === 'キャンセル' ? 'selected' : ''}>キャンセル</option>
+                  <option value="予約確定" ${statusLabel === '予約確定' ? 'selected' : ''}>予約確定</option>
+                  <option value="来院済み" ${statusLabel === '来院済み' ? 'selected' : ''}>来院済み</option>
+                  <option value="キャンセル" ${statusLabel === 'キャンセル' ? 'selected' : ''}>キャンセル</option>
                 </select>
               </div>
               <div class="form-group">
@@ -2952,6 +2982,8 @@
       const card = document.createElement('div');
       card.className = 'reservation-card';
       card.dataset.row = r.rowIndex;
+      const statusLabel = normalizeReservationStatusLabel_(r.status);
+      const statusClass = getReservationStatusClass_(statusLabel);
       if (selectedReservation && selectedReservation.rowIndex === r.rowIndex) {
         card.classList.add('selected');
       }
@@ -2964,7 +2996,7 @@
             <span class="card-time">${r.start}</span>
             <span class="card-patient">${r.patient}</span>
           </div>
-          <span class="status-badge ${r.status === '完了' ? 'completed' : 'confirmed'}">${r.status}</span>
+          <span class="status-badge ${statusClass}">${statusLabel}</span>
         </div>
         <div class="card-row">
           <span class="card-menu">${r.menu}</span>

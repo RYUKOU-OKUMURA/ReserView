@@ -175,6 +175,25 @@ function getColumnIndexes_(headers, rows) {
   return col;
 }
 
+function normalizeReservationStatus_(status) {
+  var value = String(status === null || status === undefined ? '' : status).trim();
+  if (!value) return '';
+
+  if (value === '確定' || value === '予約確定') return '予約確定';
+  if (value === '完了' || value === '来院済み' || value === '来院済') return '来院済み';
+  if (value === 'キャンセル' || value === '取消' || value === 'キャンセル済み') return 'キャンセル';
+
+  return value;
+}
+
+function isCancelledReservationStatus_(status) {
+  return normalizeReservationStatus_(status) === 'キャンセル';
+}
+
+function isIncludedReservationStatus_(status) {
+  return !isCancelledReservationStatus_(status);
+}
+
 /**
  * Patientsシートのヘッダーインデックスを取得
  */
@@ -532,10 +551,11 @@ function getFilterOptions() {
     
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
+      var normalizedStatus = normalizeReservationStatus_(row[col.status]);
       if (row[col.staff]) staffSet[row[col.staff]] = true;
       if (row[col.menu]) menuSet[row[col.menu]] = true;
       if (row[col.payment]) paymentSet[row[col.payment]] = true;
-      if (row[col.status]) statusSet[row[col.status]] = true;
+      if (normalizedStatus) statusSet[normalizedStatus] = true;
       
       var dateStr = formatDate_(row[col.date]);
       if (dateStr) {
@@ -602,11 +622,12 @@ function getInitialData(yearMonth) {
       var amount = parseAmount_(row[col.amount]);
       var ym = formattedDate ? formattedDate.substring(0, 7).replace('/', '-') : '';
       var day = extractDay_(formattedDate);
+      var normalizedStatus = normalizeReservationStatus_(row[col.status]);
 
       if (row[col.staff]) staffSet[row[col.staff]] = true;
       if (row[col.menu]) menuSet[row[col.menu]] = true;
       if (row[col.payment]) paymentSet[row[col.payment]] = true;
-      if (row[col.status]) statusSet[row[col.status]] = true;
+      if (normalizedStatus) statusSet[normalizedStatus] = true;
       if (ym) yearMonthSet[ym] = true;
 
       allReservations.push({
@@ -622,7 +643,7 @@ function getInitialData(yearMonth) {
         staff: row[col.staff] || '',
         payment: row[col.payment] || '',
         memo: row[col.memo] || '',
-        status: row[col.status] || '',
+        status: normalizedStatus,
         id: row[col.id] || '',
         lane: row[col.lane] || ''
       });
@@ -699,12 +720,13 @@ function getReservations(filters) {
       var amount = parseAmount_(row[col.amount]);
       var yearMonth = formattedDate ? formattedDate.substring(0, 7).replace('/', '-') : '';
       var day = extractDay_(formattedDate);
+      var normalizedStatus = normalizeReservationStatus_(row[col.status]);
       
       var record = {
         date: formattedDate,
         yearMonth: yearMonth,
         day: day,
-        status: row[col.status] || '',
+        status: normalizedStatus,
         staff: row[col.staff] || '',
         payment: row[col.payment] || '',
         menu: row[col.menu] || '',
@@ -729,7 +751,7 @@ function getReservations(filters) {
         staff: row[col.staff] || '',
         payment: row[col.payment] || '',
         memo: row[col.memo] || '',
-        status: row[col.status] || '',
+        status: normalizedStatus,
         id: row[col.id] || '',
         lane: row[col.lane] || ''
       };
@@ -782,7 +804,11 @@ function matchesFilters_(filters, record) {
   }
   
   // ステータスフィルタ
-  if (filters.status && filters.status !== 'all' && record.status !== filters.status) {
+  if (
+    filters.status &&
+    filters.status !== 'all' &&
+    normalizeReservationStatus_(record.status) !== normalizeReservationStatus_(filters.status)
+  ) {
     return false;
   }
   
@@ -870,10 +896,14 @@ function createEmptySummary_() {
  */
 function calculateSummary_(reservations) {
   var summary = createEmptySummary_();
-  summary.totalCount = reservations.length;
   
   for (var i = 0; i < reservations.length; i++) {
     var r = reservations[i];
+    if (!isIncludedReservationStatus_(r.status)) {
+      continue;
+    }
+
+    summary.totalCount++;
     summary.totalAmount += r.amount;
     
     // 決済方法別
@@ -918,6 +948,10 @@ function updateReservation(rowIndex, updates) {
       status: col.status,
       memo: col.memo
     };
+
+    if (updates && updates.hasOwnProperty('status')) {
+      updates.status = normalizeReservationStatus_(updates.status);
+    }
     
     for (var field in updates) {
       if (updates.hasOwnProperty(field) && fieldMap.hasOwnProperty(field) && fieldMap[field] >= 0) {
@@ -1003,6 +1037,7 @@ function getAnalysisBundle(yearMonth, months) {
         var row = resData[i];
         var dateValue = row[resCol.date];
         if (!dateValue) continue;
+        if (!isIncludedReservationStatus_(row[resCol.status])) continue;
 
         var ym = formatYearMonth_(dateValue);
         var amount = parseAmount_(row[resCol.amount]);
@@ -1254,6 +1289,7 @@ function getAnalysisBundleForYear(year, months) {
 
         var dateObj = toDate_(dateValue);
         if (!dateObj) continue;
+        if (!isIncludedReservationStatus_(row[resCol.status])) continue;
 
         var ym = formatYearMonth_(dateValue);
         if (!ym) continue;
@@ -1468,6 +1504,7 @@ function getAnalysisSummary(yearMonth) {
       var row = resData[i];
       var dateValue = row[resCol.date];
       if (!dateValue) continue;
+      if (!isIncludedReservationStatus_(row[resCol.status])) continue;
       
       var ym = formatYearMonth_(dateValue);
       var amount = parseAmount_(row[resCol.amount]);
@@ -1619,6 +1656,7 @@ function getCustomerAnalysis(yearMonth) {
       if (!dateValue) continue;
       var ym = formatYearMonth_(dateValue);
       if (ym !== targetYM) continue;
+      if (!isIncludedReservationStatus_(row[resCol.status])) continue;
       var patientName = row[resCol.patient] || '';
       if (patientName) {
         targetPatients[patientName] = true;
@@ -1750,6 +1788,7 @@ function getCustomerAnalysisForYear(year) {
         if (!dateValue) continue;
         var ym = formatYearMonth_(dateValue);
         if (String(ym).substring(0, 4) !== yearStr) continue;
+        if (!isIncludedReservationStatus_(row[resCol.status])) continue;
         var patientName = row[resCol.patient] || '';
         if (patientName) targetPatients[patientName] = true;
       }
@@ -1910,6 +1949,7 @@ function getSalesTrend(months) {
       var row = data[i];
       var dateValue = row[col.date];
       if (!dateValue) continue;
+      if (!isIncludedReservationStatus_(row[col.status])) continue;
       
       var ym = formatYearMonth_(dateValue);
       var amount = parseAmount_(row[col.amount]);
@@ -1991,6 +2031,7 @@ function getSalesTrendForYear(year) {
         var row = data[i];
         var dateValue = row[col.date];
         if (!dateValue) continue;
+        if (!isIncludedReservationStatus_(row[col.status])) continue;
 
         var ym = formatYearMonth_(dateValue);
         if (!ym || ym.substring(0, 4) !== yearStr) continue;
@@ -2060,6 +2101,7 @@ function getMenuAnalysis(yearMonth) {
       var row = data[i];
       var dateValue = row[col.date];
       if (!dateValue) continue;
+      if (!isIncludedReservationStatus_(row[col.status])) continue;
       
       var ym = formatYearMonth_(dateValue);
       if (ym !== yearMonth) continue;
@@ -2139,6 +2181,7 @@ function getMenuAnalysisForYear(year) {
         var row = data[i];
         var dateValue = row[col.date];
         if (!dateValue) continue;
+        if (!isIncludedReservationStatus_(row[col.status])) continue;
 
         var ym = formatYearMonth_(dateValue);
         if (!ym || ym.substring(0, 4) !== yearStr) continue;
@@ -2325,6 +2368,7 @@ function getMonthlySales(yearMonth) {
         var row = data[i];
         var dateValue = row[col.date];
         if (!dateValue) continue;
+        if (!isIncludedReservationStatus_(row[col.status])) continue;
         
         var ym = formatYearMonth_(dateValue);
         if (ym === yearMonth) {
@@ -2364,6 +2408,7 @@ function getYearlySales(year) {
       var row = data[i];
       var dateValue = row[col.date];
       if (!dateValue) continue;
+      if (!isIncludedReservationStatus_(row[col.status])) continue;
       
       var dateObj = (dateValue instanceof Date) ? dateValue : null;
       var yearStr = '';
@@ -2469,6 +2514,7 @@ function exportSalesSummary(startYearMonth, endYearMonth) {
       var row = data[r];
       var dateValue = row[col.date];
       if (!dateValue) continue;
+      if (!isIncludedReservationStatus_(row[col.status])) continue;
 
       var ym = formatYearMonth_(dateValue);
       if (!ymSet[ym]) continue;
