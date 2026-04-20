@@ -2521,7 +2521,6 @@
           if (found) {
             selectedReservation = found;
             renderDetailPanel();
-            updateVirtualReservations(true);
           } else if (selectedReservation) {
             selectedReservation = null;
             renderDetailPanel();
@@ -2762,7 +2761,7 @@
             <div class="panel-subtitle">${r.date} ${r.start} - ${r.end}</div>
           </div>
           <div class="panel-chips">
-            <span class="panel-chip chip-amount">¥${r.amount.toLocaleString()}</span>
+            <span class="panel-chip chip-amount">¥${(r.amount || 0).toLocaleString()}</span>
             <span class="panel-chip chip-status-${r.status === '完了' ? 'completed' : r.status === 'キャンセル' ? 'cancelled' : 'confirmed'}">${r.status}</span>
             ${r.payment ? `<span class="panel-chip">${r.payment}</span>` : ''}
           </div>
@@ -2827,52 +2826,6 @@
 
     function cancelEdit() {
       renderDetailPanel();
-    }
-
-    function handleVirtualScroll() {
-      updateVirtualReservations(false);
-    }
-
-    function updateVirtualReservations(force) {
-      if (!virtualContainer || !virtualTrack) return;
-      const scrollTop = virtualContainer.scrollTop;
-      const viewHeight = virtualContainer.clientHeight;
-      const total = reservations.length;
-      if (total === 0) return;
-
-      const start = Math.max(Math.floor(scrollTop / reservationRowHeight) - VIRTUAL_BUFFER, 0);
-      const end = Math.min(total, Math.ceil((scrollTop + viewHeight) / reservationRowHeight) + VIRTUAL_BUFFER);
-
-      if (!force && start === lastRenderRange.start && end === lastRenderRange.end) {
-        return;
-      }
-      lastRenderRange = { start, end };
-
-      virtualTrack.innerHTML = '';
-      const frag = document.createDocumentFragment();
-
-      for (let i = start; i < end; i++) {
-        const card = createReservationCard(reservations[i]);
-        card.style.position = 'absolute';
-        card.style.left = '0';
-        card.style.right = '0';
-        card.style.top = `${i * reservationRowHeight}px`;
-        frag.appendChild(card);
-      }
-
-      virtualTrack.appendChild(frag);
-
-      const firstCard = virtualTrack.firstElementChild;
-      if (firstCard) {
-        const measured = firstCard.getBoundingClientRect().height;
-        if (measured && Math.abs(measured - reservationRowHeight) > 2) {
-          reservationRowHeight = measured;
-          virtualTrack.style.height = `${reservationRowHeight * total}px`;
-          lastRenderRange = { start: -1, end: -1 };
-          updateVirtualReservations(true);
-          return;
-        }
-      }
     }
 
     function createReservationCard(r) {
