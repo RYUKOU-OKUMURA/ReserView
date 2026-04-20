@@ -1345,6 +1345,116 @@
       margin-bottom: 16px;
       opacity: 0.5;
     }
+
+    /* P5: ダークモード */
+    html[data-theme="dark"] {
+      --primary: #2dd4bf;
+      --primary-light: #134e4a;
+      --primary-dark: #99f6e4;
+      --primary-glow: rgba(45, 212, 191, 0.15);
+      --accent: #fbbf24;
+      --accent-light: #451a03;
+      --bg: #0f172a;
+      --bg-pattern: none;
+      --card-bg: #1e293b;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-light: #64748b;
+      --border: #334155;
+      --border-light: #1e293b;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+      --shadow: 0 4px 12px rgba(0,0,0,0.4);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+      --success-light: #052e16;
+      --warning-light: #422006;
+      --danger-light: #450a0a;
+      --info-light: #172554;
+    }
+    html[data-theme="dark"] .header,
+    html[data-theme="dark"] .mode-tabs,
+    html[data-theme="dark"] .filter-area,
+    html[data-theme="dark"] .summary-bar {
+      background: var(--card-bg);
+    }
+    html[data-theme="dark"] input,
+    html[data-theme="dark"] select,
+    html[data-theme="dark"] textarea {
+      background: #0f172a;
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    /* P2: 日付グループヘッダー */
+    .day-group-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 16px;
+      background: var(--border-light);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .day-group-date {
+      font-weight: 700;
+      color: var(--text);
+    }
+    .day-group-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* P3: ヘッダーKPIチップ */
+    .header-rate {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 10px;
+    }
+    .header-rate.positive { color: var(--success); background: var(--success-light); }
+    .header-rate.negative { color: var(--danger); background: var(--danger-light); }
+    .header-unit {
+      font-size: 13px;
+      color: var(--text-muted);
+      background: var(--bg);
+      padding: 4px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    /* P4: 詳細パネルサマリーチップ */
+    .panel-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 12px 20px 0;
+    }
+    .panel-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .panel-chip.chip-amount {
+      background: var(--primary-light);
+      border-color: var(--primary);
+      color: var(--primary-dark);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+    }
+    .panel-chip.chip-status-completed { background: var(--success-light); border-color: var(--success); color: var(--success); }
+    .panel-chip.chip-status-confirmed { background: var(--info-light); border-color: var(--info); color: var(--info); }
+    .panel-chip.chip-status-cancelled { background: var(--danger-light); border-color: var(--danger); color: var(--danger); }
   </style>
 </head>
 <body>
@@ -1373,8 +1483,11 @@
         <span class="header-annual" id="headerAnnual">年累計 ¥0</span>
         <span class="header-amount" id="headerAmount">¥0</span>
         <span class="header-count" id="headerCount">0件</span>
+        <span class="header-rate" id="headerRate" style="display:none"></span>
+        <span class="header-unit" id="headerUnit" style="display:none"></span>
       </div>
       <div class="header-actions">
+        <button class="btn-sm btn-outline" id="darkToggle" onclick="toggleDarkMode()" title="ダーク/ライト切替">🌙</button>
         <button class="btn-sm btn-outline" id="openExport">集計DL</button>
       </div>
     </div>
@@ -1791,9 +1904,34 @@
     let lastRenderRange = { start: 0, end: 0 };
 
     // ========================================
+    // P5: ダークモード
+    // ========================================
+    (function() {
+      if (localStorage.getItem('theme') === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+
+    function toggleDarkMode() {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      if (isDark) {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.removeItem('theme');
+        document.getElementById('darkToggle').textContent = '🌙';
+      } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
+        document.getElementById('darkToggle').textContent = '☀️';
+      }
+    }
+
+    // ========================================
     // 初期化
     // ========================================
     document.addEventListener('DOMContentLoaded', function() {
+      const saved = localStorage.getItem('theme');
+      const btn = document.getElementById('darkToggle');
+      if (btn) btn.textContent = saved === 'dark' ? '☀️' : '🌙';
       initApp();
     });
 
@@ -2512,6 +2650,7 @@
       const prevScroll = preserveScroll ? container.scrollTop : 0;
 
       container.innerHTML = '';
+      virtualTrack = null;
 
       if (reservations.length === 0) {
         container.innerHTML = `
@@ -2520,31 +2659,41 @@
             <p>該当する予約がありません</p>
           </div>
         `;
-        virtualTrack = null;
         return;
       }
 
-      const track = document.createElement('div');
-      track.id = 'reservationVirtualTrack';
-      track.style.position = 'relative';
-      track.style.height = `${reservationRowHeight * reservations.length}px`;
-      track.style.width = '100%';
+      // 日付でグループ化
+      const groups = {};
+      const groupOrder = [];
+      for (const r of reservations) {
+        if (!groups[r.date]) {
+          groups[r.date] = { reservations: [], total: 0, count: 0 };
+          groupOrder.push(r.date);
+        }
+        groups[r.date].reservations.push(r);
+        groups[r.date].total += r.amount || 0;
+        groups[r.date].count++;
+      }
 
-      container.appendChild(track);
-      virtualTrack = track;
-      virtualContainer = container;
-      lastRenderRange = { start: 0, end: 0 };
-
-      container.removeEventListener('scroll', handleVirtualScroll);
-      container.addEventListener('scroll', handleVirtualScroll);
+      const frag = document.createDocumentFragment();
+      for (const date of groupOrder) {
+        const g = groups[date];
+        const header = document.createElement('div');
+        header.className = 'day-group-header';
+        header.innerHTML = `
+          <span class="day-group-date">${date}</span>
+          <span class="day-group-meta">${g.count}件 · ¥${g.total.toLocaleString()}</span>
+        `;
+        frag.appendChild(header);
+        for (const r of g.reservations) {
+          frag.appendChild(createReservationCard(r));
+        }
+      }
+      container.appendChild(frag);
 
       if (preserveScroll) {
         container.scrollTop = prevScroll;
-      } else {
-        container.scrollTop = 0;
       }
-
-      updateVirtualReservations(true);
     }
 
     function updateSummary(summary) {
@@ -2558,6 +2707,14 @@
     function updateHeaderSummary(summary) {
       document.getElementById('headerAmount').textContent = '¥' + summary.totalAmount.toLocaleString();
       document.getElementById('headerCount').textContent = summary.totalCount + '件';
+      document.getElementById('headerRate').style.display = 'none';
+      const unitEl = document.getElementById('headerUnit');
+      if (summary.totalCount > 0) {
+        unitEl.textContent = '単価¥' + Math.round(summary.totalAmount / summary.totalCount).toLocaleString();
+        unitEl.style.display = '';
+      } else {
+        unitEl.style.display = 'none';
+      }
     }
 
     async function loadAnnualSalesHeader() {
@@ -2578,8 +2735,9 @@
 
     function selectReservation(rowIndex) {
       selectedReservation = reservations.find(r => r.rowIndex === rowIndex);
-      updateVirtualReservations(true);
-      // 詳細パネルを表示
+      document.querySelectorAll('.reservation-card').forEach(card => {
+        card.classList.toggle('selected', parseInt(card.dataset.row) === rowIndex);
+      });
       renderDetailPanel();
     }
 
@@ -2602,6 +2760,11 @@
           <div class="panel-header">
             <div class="panel-title">${r.patient}</div>
             <div class="panel-subtitle">${r.date} ${r.start} - ${r.end}</div>
+          </div>
+          <div class="panel-chips">
+            <span class="panel-chip chip-amount">¥${r.amount.toLocaleString()}</span>
+            <span class="panel-chip chip-status-${r.status === '完了' ? 'completed' : r.status === 'キャンセル' ? 'cancelled' : 'confirmed'}">${r.status}</span>
+            ${r.payment ? `<span class="panel-chip">${r.payment}</span>` : ''}
           </div>
           <div class="panel-content">
             <div class="detail-section">
@@ -2897,11 +3060,16 @@
       const repeatDiffLabel = repeatPtDiff === null
         ? ''
         : `前年差 ${repeatPtDiff >= 0 ? '+' : ''}${repeatPtDiff.toFixed(1)}pt`;
-      
+      const countChange = summary.comparison?.countRate ?? 0;
+      const countChangeClass = countChange >= 0 ? 'positive' : 'negative';
+      const countChangeIcon = countChange >= 0 ? '↑' : '↓';
+      const countForUnit = isYear ? (current.avgCount ?? Math.round((current.count || 0) / 12)) : current.count;
+      const unitPrice = countForUnit > 0 ? Math.round((current.sales || 0) / countForUnit) : 0;
+
       grid.innerHTML = `
         <div class="kpi-card">
           <div class="kpi-label">${title}</div>
-          <div class="kpi-value">¥${current.sales.toLocaleString()}</div>
+          <div class="kpi-value">¥${(current.sales || 0).toLocaleString()}</div>
           <div class="kpi-sub">
             ${compareLabel}
             <span class="kpi-change ${salesChangeClass}">${salesChangeIcon} ${Math.abs(salesChange).toFixed(1)}%</span>
@@ -2910,7 +3078,15 @@
         <div class="kpi-card">
           <div class="kpi-label">来院数</div>
           <div class="kpi-value">${isYear ? '月平均 ' : ''}${countValue}件</div>
-          <div class="kpi-sub">${isYear ? '月平均 ' : ''}${uniqueValue}名</div>
+          <div class="kpi-sub">
+            ${isYear ? '月平均 ' : ''}${uniqueValue}名
+            ${summary.comparison?.countRate !== undefined && summary.comparison?.countRate !== 0 ? `&nbsp;${compareLabel} <span class="kpi-change ${countChangeClass}">${countChangeIcon} ${Math.abs(countChange).toFixed(1)}%</span>` : ''}
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">客単価</div>
+          <div class="kpi-value">¥${unitPrice.toLocaleString()}</div>
+          <div class="kpi-sub">1来院あたりの平均単価</div>
         </div>
         <div class="kpi-card success">
           <div class="kpi-label">リピート率</div>
@@ -2923,12 +3099,12 @@
         <div class="kpi-card warning">
           <div class="kpi-label">離反予備軍</div>
           <div class="kpi-value">${summary.churnWarning}名</div>
-          <div class="kpi-sub">90-180日未来院</div>
+          <div class="kpi-sub">90-180日未来院${summary.churnWarning > 0 ? ' · 要フォロー' : ''}</div>
         </div>
         <div class="kpi-card danger">
           <div class="kpi-label">離反確定</div>
           <div class="kpi-value">${summary.churnConfirmed}名</div>
-          <div class="kpi-sub">180日以上未来院</div>
+          <div class="kpi-sub">180日以上未来院${summary.churnConfirmed > 0 ? ' · 優先連絡' : ''}</div>
         </div>
       `;
     }
@@ -2939,6 +3115,24 @@
       if (!current) return;
       document.getElementById('headerAmount').textContent = '¥' + (current.sales || 0).toLocaleString();
       document.getElementById('headerCount').textContent = (current.count || 0) + '件';
+      const rateEl = document.getElementById('headerRate');
+      const rate = summary.comparison?.salesRate;
+      if (rate !== undefined && rate !== null) {
+        const isPos = rate >= 0;
+        rateEl.textContent = (isPos ? '▲' : '▼') + Math.abs(rate).toFixed(1) + '%';
+        rateEl.className = 'header-rate ' + (isPos ? 'positive' : 'negative');
+        rateEl.style.display = '';
+      } else {
+        rateEl.style.display = 'none';
+      }
+      const unitEl = document.getElementById('headerUnit');
+      const cnt = current.count || 0;
+      if (cnt > 0) {
+        unitEl.textContent = '単価¥' + Math.round((current.sales || 0) / cnt).toLocaleString();
+        unitEl.style.display = '';
+      } else {
+        unitEl.style.display = 'none';
+      }
     }
 
     function renderSalesChart(trend) {
