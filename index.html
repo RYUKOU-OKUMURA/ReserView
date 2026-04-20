@@ -1759,11 +1759,15 @@
             <!-- 稼働率 -->
             <div class="sub-content" id="occupancyContent">
               <div id="occupancyMonthView">
+                <div class="occupancy-toolbar" style="margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                  <label for="occupancyStaffSelect" class="kpi-label" style="margin:0;">担当（メインレーン）</label>
+                  <select id="occupancyStaffSelect" style="min-width:12rem;padding:0.35rem 0.5rem;border-radius:6px;"></select>
+                </div>
                 <div class="kpi-grid">
                   <div class="kpi-card">
-                    <div class="kpi-label">月平均稼働率</div>
+                    <div class="kpi-label">月平均稼働率（メインレーン）</div>
                     <div class="kpi-value" id="kpiAvgOccupancy">-</div>
-                    <div class="kpi-sub" id="kpiAvgOccupancyNote">営業日 0日</div>
+                    <div class="kpi-sub" id="kpiAvgOccupancyNote">勤務日 0日</div>
                   </div>
                   <div class="kpi-card">
                     <div class="kpi-label">稼働率 最高曜日</div>
@@ -1777,13 +1781,13 @@
                   </div>
                 </div>
                 <div class="chart-card">
-                  <div class="chart-title">📅 曜日別 平均稼働率</div>
+                  <div class="chart-title">📅 曜日別 平均稼働率（勤務枠比）</div>
                   <div class="chart-container">
                     <canvas id="dowChart"></canvas>
                   </div>
                 </div>
                 <div class="chart-card">
-                  <div class="chart-title">🕘 時間帯別 平均稼働率</div>
+                  <div class="chart-title">🕘 時間帯別 平均稼働率（勤務枠比）</div>
                   <div class="chart-container">
                     <canvas id="hourChart"></canvas>
                   </div>
@@ -2002,8 +2006,11 @@
       sales: {},      // { [ym]: trend }
       customers: {},  // { [ym]: customerAnalysis }
       menu: {},       // { [ym]: menuAnalysis }
-      occupancy: {}   // { [ym]: occupancyAnalysis }
+      occupancy: {}   // { [`${ym}::担当名`]: occupancyAnalysis }
     };
+    /** @type {{ name: string, mainLane: string }[]} */
+    let occupancyStaffList = [];
+    let selectedOccupancyStaff = '';
     const annualSalesCache = {}; // { [year]: total }
     const monthlySalesCache = {}; // { [ym]: total }
     // Chart.jsローダー（初期表示をブロックしない）
@@ -2075,6 +2082,9 @@
         initGlobalYearMonth();
         initFilterOptions();
         initEventListeners();
+
+        applyOccupancyStaffListFromServer_(initialData.occupancyStaffList);
+        populateOccupancyStaffSelect_();
         
         // データを取得
         await loadReservations({ preserveSelection: false });
@@ -2582,6 +2592,16 @@
       
       // 初回年累計読み込み
       loadAnnualSalesHeader();
+
+      const occStaffSel = document.getElementById('occupancyStaffSelect');
+      if (occStaffSel) {
+        occStaffSel.addEventListener('change', async function() {
+          selectedOccupancyStaff = this.value;
+          if (currentMode === 'analysis' && currentSubTab === 'occupancy') {
+            await loadSubTabData('occupancy');
+          }
+        });
+      }
     }
 
     function onFilterChange() {
@@ -2689,6 +2709,10 @@
           }
           if (data.diagnostics) {
             renderSchemaDiagnostics(data.diagnostics);
+          }
+          if (data.occupancyStaffList) {
+            applyOccupancyStaffListFromServer_(data.occupancyStaffList);
+            populateOccupancyStaffSelect_();
           }
           reservationCache[ym] = data.reservations || [];
         }
@@ -3144,6 +3168,42 @@
       }
     }
 
+    function applyOccupancyStaffListFromServer_(list) {
+      occupancyStaffList = Array.isArray(list) ? list : [];
+      if (!selectedOccupancyStaff || !occupancyStaffList.some(s => s.name === selectedOccupancyStaff)) {
+        selectedOccupancyStaff = occupancyStaffList.length ? occupancyStaffList[0].name : '';
+      }
+    }
+
+    function populateOccupancyStaffSelect_() {
+      const sel = document.getElementById('occupancyStaffSelect');
+      if (!sel) return;
+      sel.innerHTML = '';
+      occupancyStaffList.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.name;
+        const lane = s.mainLane != null && String(s.mainLane) !== '' ? String(s.mainLane) : '';
+        opt.textContent = lane ? `${s.name}（レーン${lane}）` : s.name;
+        sel.appendChild(opt);
+      });
+      if (selectedOccupancyStaff && [...sel.options].some(o => o.value === selectedOccupancyStaff)) {
+        sel.value = selectedOccupancyStaff;
+      } else if (sel.options.length) {
+        selectedOccupancyStaff = sel.options[0].value;
+        sel.value = selectedOccupancyStaff;
+      }
+    }
+
+    function formatOccupancyMinutes_(totalMin) {
+      const m = Math.round(Number(totalMin) || 0);
+      if (m <= 0) return '0分';
+      const h = Math.floor(m / 60);
+      const mm = m % 60;
+      if (h <= 0) return `${mm}分`;
+      if (mm === 0) return `${h}時間`;
+      return `${h}時間${mm}分`;
+    }
+
     async function loadSubTabData(sub) {
       showLoading();
       try {
@@ -3189,10 +3249,19 @@
             return;
           }
 
-          let data = analysisSubCache.occupancy[period.key];
+          populateOccupancyStaffSelect_();
+          if (!selectedOccupancyStaff) {
+            renderOccupancyUnavailable(
+              'スプレッドシートに StaffConfig シートを作成し、担当・メインレーン・勤務時間を登録すると表示できます。'
+            );
+            return;
+          }
+
+          const occCacheKey = `${period.key}::${selectedOccupancyStaff}`;
+          let data = analysisSubCache.occupancy[occCacheKey];
           if (!data) {
-            data = await runGAS('getOccupancyAnalysis', period.yearMonth);
-            analysisSubCache.occupancy[period.key] = data;
+            data = await runGAS('getOccupancyAnalysis', period.yearMonth, selectedOccupancyStaff);
+            analysisSubCache.occupancy[occCacheKey] = data;
           }
           renderOccupancyCharts(data);
         }
@@ -3628,7 +3697,17 @@
       document.getElementById('occupancyYearNotice').hidden = true;
 
       document.getElementById('kpiAvgOccupancy').textContent = `${(data.summary.average || 0).toFixed(1)}%`;
-      document.getElementById('kpiAvgOccupancyNote').textContent = `営業日 ${data.summary.businessDayCount || 0}日`;
+      const sum = data.summary || {};
+      const noteParts = [];
+      noteParts.push(`勤務日 ${sum.businessDayCount || 0}日`);
+      if (sum.availableMinutes != null) {
+        noteParts.push(`提供可能 ${formatOccupancyMinutes_(sum.availableMinutes)}`);
+      }
+      let noteText = noteParts.join(' / ');
+      if (sum.note) {
+        noteText += ` — ${sum.note}`;
+      }
+      document.getElementById('kpiAvgOccupancyNote').textContent = noteText;
       document.getElementById('kpiPeakDow').textContent = data.summary.peakDow || '-';
       document.getElementById('kpiLowDow').textContent = `最低曜日 ${data.summary.lowDow || '-'}`;
       document.getElementById('kpiPeakHour').textContent = data.summary.peakHour || '-';

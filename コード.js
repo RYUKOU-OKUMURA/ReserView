@@ -16,6 +16,10 @@ var SHEET_NAME = 'Reservations';
 var PATIENTS_SHEET = 'Patients';
 var EXPENSES_SHEET = 'Expenses';  // Phase 3で使用
 var ANNUAL_PLAN_SHEET = 'AnnualPlans'; // 年次の予算/計画（CF用）
+var STAFF_CONFIG_SHEET = 'StaffConfig'; // スタッフ別メインレーン・勤務設定（稼働率用）
+var STAFF_CONFIG_HEADERS = ['担当', 'メインレーン', '勤務開始', '勤務終了', '勤務曜日', '有効'];
+var DEFAULT_OCCUPANCY_START_MINUTES = 9 * 60;
+var DEFAULT_OCCUPANCY_END_MINUTES = 18 * 60;
 
 // ========================================
 // Webアプリ エントリーポイント
@@ -25,6 +29,22 @@ function doGet() {
     .setTitle(APP_TITLE)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu('予約システム')
+      .addItem('StaffConfig を自動設定/更新', 'setupStaffConfigSheetFromMenu')
+      .addItem('StaffConfig を開く', 'openStaffConfigSheetFromMenu')
+      .addToUi();
+  } catch (error) {
+    console.error('onOpen error:', error);
+  }
+}
+
+function onInstall() {
+  onOpen();
 }
 
 // ========================================
@@ -355,11 +375,63 @@ function diagnoseExpensesSchema_(sheet) {
   return buildSchemaDiagnosticItem_(EXPENSES_SHEET, 'ok', '列構成は正常です。', headers);
 }
 
+/**
+ * StaffConfig シート（稼働率用スタッフ設定）の診断
+ */
+function diagnoseStaffConfigSchema_(sheet) {
+  if (!sheet) {
+    return buildSchemaDiagnosticItem_(
+      STAFF_CONFIG_SHEET,
+      'warn',
+      '未作成です。スタッフ別メインレーン稼働率には ' + STAFF_CONFIG_SHEET + ' シートが必要です。',
+      []
+    );
+  }
+
+  var data = getSheetValues_(sheet);
+  var headers = data[0] || [];
+  var headerMap = buildHeaderIndexMap_(headers);
+  var missing = getMissingHeaderLabels_(headerMap, [
+    '担当',
+    'メインレーン',
+    '勤務開始',
+    '勤務終了',
+    '勤務曜日'
+  ]);
+
+  if (missing.length > 0) {
+    return buildSchemaDiagnosticItem_(
+      STAFF_CONFIG_SHEET,
+      'warn',
+      '不足列: ' + missing.join(', ') + '（稼働率タブでスタッフ別集計に必要）',
+      headers
+    );
+  }
+
+  if (data.length < 2) {
+    return buildSchemaDiagnosticItem_(
+      STAFF_CONFIG_SHEET,
+      'warn',
+      '列構成は正常ですがスタッフ設定行がありません。',
+      headers
+    );
+  }
+
+  return buildSchemaDiagnosticItem_(STAFF_CONFIG_SHEET, 'ok', '列構成は正常です。', headers);
+}
+
 function getStartupSchemaDiagnostics_(ss) {
+  try {
+    ensureStaffConfigSheet_({ spreadsheet: ss, seedFromReservations: true });
+  } catch (setupError) {
+    console.error('ensureStaffConfigSheet_ error:', setupError);
+  }
+
   var items = [
     diagnoseReservationSchema_(ss.getSheetByName(SHEET_NAME)),
     diagnosePatientsSchema_(ss.getSheetByName(PATIENTS_SHEET)),
-    diagnoseExpensesSchema_(ss.getSheetByName(EXPENSES_SHEET))
+    diagnoseExpensesSchema_(ss.getSheetByName(EXPENSES_SHEET)),
+    diagnoseStaffConfigSchema_(ss.getSheetByName(STAFF_CONFIG_SHEET))
   ];
 
   var summary = { ok: 0, warn: 0, error: 0 };
@@ -609,7 +681,10 @@ function createEmptyOccupancyAnalysis_() {
       peakHour: '',
       lowDow: '',
       lowHour: '',
-      businessDayCount: 0
+      businessDayCount: 0,
+      availableMinutes: 0,
+      staffName: '',
+      note: ''
     }
   };
 }
@@ -643,6 +718,466 @@ function buildOccupancyCalendar_(yearMonth) {
   };
 }
 
+/**
+ * StaffConfig 列インデックス
+ */
+function getStaffConfigColumnIndexes_(headers) {
+  var headerMap = buildHeaderIndexMap_(headers);
+  return {
+    name: getHeaderIndex_(headerMap, '担当'),
+    mainLane: getHeaderIndex_(headerMap, 'メインレーン'),
+    workStart: getHeaderIndex_(headerMap, '勤務開始'),
+    workEnd: getHeaderIndex_(headerMap, '勤務終了'),
+    workDow: getHeaderIndex_(headerMap, '勤務曜日'),
+    enabled: getHeaderIndex_(headerMap, '有効')
+  };
+}
+
+function normalizeOccupancyLaneValue_(value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (typeof value === 'number' && isFinite(value)) {
+    return String(Math.round(value));
+  }
+  return String(value).trim();
+}
+
+function occupancyLanesMatch_(cellValue, mainLaneNormalized) {
+  return normalizeOccupancyLaneValue_(cellValue) === mainLaneNormalized;
+}
+
+function isStaffConfigRowEnabled_(value) {
+  if (value === null || value === undefined || value === '') return true;
+  if (typeof value === 'boolean') return value;
+  var s = String(value).trim().toLowerCase();
+  if (!s) return true;
+  if (s === 'false' || s === '0' || s === 'no' || s === 'off' || s === '無効' || s === 'いいえ' || s === '×' || s === 'x') {
+    return false;
+  }
+  if (s === 'true' || s === '1' || s === 'yes' || s === 'on' || s === '有効' || s === 'はい' || s === '○') {
+    return true;
+  }
+  return true;
+}
+
+/**
+ * 月火水木金土日 → 0..6（getBusinessDayOfWeekIndex_ と同じ）
+ */
+function japaneseWeekdayCharToIndex_(ch) {
+  var map = { '月': 0, '火': 1, '水': 2, '木': 3, '金': 4, '土': 5, '日': 6 };
+  return map.hasOwnProperty(ch) ? map[ch] : -1;
+}
+
+/**
+ * 「月,火,木」や「月・火」などをパースして曜日インデックスのマップを返す
+ */
+function parseStaffWorkDayMap_(cellValue) {
+  var result = {};
+  var raw = String(cellValue === null || cellValue === undefined ? '' : cellValue);
+  var parts = raw.split(/[,、，\s\/・]+/).filter(function(p) {
+    return p.length > 0;
+  });
+  for (var i = 0; i < parts.length; i++) {
+    var token = parts[i].trim();
+    if (!token) continue;
+    for (var c = 0; c < token.length; c++) {
+      var idx = japaneseWeekdayCharToIndex_(token.charAt(c));
+      if (idx >= 0) result[idx] = true;
+    }
+  }
+  return result;
+}
+
+function occupancyStaffCacheKey_(staffName) {
+  return String(staffName || '').trim().replace(/:/g, '_');
+}
+
+/**
+ * 分単位を hh:mm 形式に変換
+ */
+function formatMinutesToTimeString_(minutes) {
+  var safe = Math.max(0, Math.round(minutes || 0));
+  var hours = Math.floor(safe / 60);
+  var mins = safe % 60;
+  return ('0' + hours).slice(-2) + ':' + ('0' + mins).slice(-2);
+}
+
+function getStaffConfigRequiredHeaderIndexes_(headers) {
+  var col = getStaffConfigColumnIndexes_(headers);
+  var required = [col.name, col.mainLane, col.workStart, col.workEnd, col.workDow];
+  for (var i = 0; i < required.length; i++) {
+    if (required[i] < 0) return null;
+  }
+  return col;
+}
+
+/**
+ * 予約データから StaffConfig の初期候補を推定
+ */
+function buildSuggestedStaffConfigRowsFromReservations_() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) return [];
+
+  var data = getSheetValues_(sheet);
+  if (data.length < 2) return [];
+
+  var headers = data[0];
+  var rows = data.slice(1);
+  var col = getColumnIndexes_(headers, rows);
+  assertReservationSheetSchema_(headers, col, rows);
+
+  var staffStats = {};
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!isIncludedReservationStatus_(row[col.status])) continue;
+
+    var staffName = String(row[col.staff] || '').trim();
+    if (!staffName) continue;
+
+    if (!staffStats[staffName]) {
+      staffStats[staffName] = {
+        laneCounts: {},
+        laneFirstSeen: [],
+        minStart: null,
+        maxEnd: null,
+        dowMap: {}
+      };
+    }
+
+    var stat = staffStats[staffName];
+    var lane = normalizeOccupancyLaneValue_(row[col.lane]);
+    if (lane) {
+      if (!stat.laneCounts[lane]) {
+        stat.laneCounts[lane] = 0;
+        stat.laneFirstSeen.push(lane);
+      }
+      stat.laneCounts[lane]++;
+    }
+
+    var startMinutes = parseTimeToMinutes_(row[col.start]);
+    var endMinutes = parseTimeToMinutes_(row[col.end]);
+    var clipped = clipIntervalToBusinessHours_(
+      startMinutes,
+      endMinutes,
+      DEFAULT_OCCUPANCY_START_MINUTES,
+      DEFAULT_OCCUPANCY_END_MINUTES
+    );
+    if (clipped) {
+      if (stat.minStart === null || clipped[0] < stat.minStart) stat.minStart = clipped[0];
+      if (stat.maxEnd === null || clipped[1] > stat.maxEnd) stat.maxEnd = clipped[1];
+    }
+
+    var dateObj = parseDateValue_(row[col.date]);
+    var dowIdx = getBusinessDayOfWeekIndex_(dateObj);
+    if (dowIdx >= 0) stat.dowMap[dowIdx] = true;
+  }
+
+  var staffNames = Object.keys(staffStats).sort(function(a, b) {
+    return a.localeCompare(b, 'ja');
+  });
+
+  return staffNames.map(function(name) {
+    var stat = staffStats[name];
+    var selectedLane = '';
+    var bestLaneCount = -1;
+    for (var i2 = 0; i2 < stat.laneFirstSeen.length; i2++) {
+      var laneKey = stat.laneFirstSeen[i2];
+      var count = stat.laneCounts[laneKey] || 0;
+      if (count > bestLaneCount) {
+        bestLaneCount = count;
+        selectedLane = laneKey;
+      }
+    }
+
+    var dowLabels = [];
+    var dayLabelMap = ['月', '火', '水', '木', '金', '土', '日'];
+    for (var dow = 0; dow < dayLabelMap.length; dow++) {
+      if (stat.dowMap[dow]) dowLabels.push(dayLabelMap[dow]);
+    }
+
+    var startMin = stat.minStart === null ? DEFAULT_OCCUPANCY_START_MINUTES : stat.minStart;
+    var endMin = stat.maxEnd === null ? DEFAULT_OCCUPANCY_END_MINUTES : stat.maxEnd;
+
+    return {
+      name: name,
+      mainLane: selectedLane || '1',
+      workStart: formatMinutesToTimeString_(startMin),
+      workEnd: formatMinutesToTimeString_(endMin),
+      workDow: dowLabels.length ? dowLabels.join(',') : '月,火,水,木,金,土',
+      enabled: 'はい'
+    };
+  });
+}
+
+/**
+ * StaffConfig シートを自動作成/補完する
+ * 既存値は優先し、空欄項目や未登録スタッフのみ候補値で埋める。
+ */
+function ensureStaffConfigSheet_(options) {
+  var opts = options || {};
+  var ss = opts.spreadsheet || SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(STAFF_CONFIG_SHEET);
+  var created = false;
+  var initialized = false;
+  var appended = 0;
+  var updated = 0;
+
+  if (!sheet) {
+    sheet = ss.insertSheet(STAFF_CONFIG_SHEET);
+    created = true;
+  }
+
+  var values = getSheetValues_(sheet);
+  if (values.length === 0) {
+    sheet.getRange(1, 1, 1, STAFF_CONFIG_HEADERS.length).setValues([STAFF_CONFIG_HEADERS]);
+    values = [STAFF_CONFIG_HEADERS.slice()];
+    initialized = true;
+  } else {
+    var headerIndexes = getStaffConfigRequiredHeaderIndexes_(values[0] || []);
+    if (!headerIndexes) {
+      if (values.length <= 1) {
+        sheet.clearContents();
+        sheet.getRange(1, 1, 1, STAFF_CONFIG_HEADERS.length).setValues([STAFF_CONFIG_HEADERS]);
+        values = [STAFF_CONFIG_HEADERS.slice()];
+        initialized = true;
+      } else {
+        return {
+          sheet: sheet,
+          created: created,
+          initialized: initialized,
+          appended: appended,
+          updated: updated,
+          skipped: true,
+          message: STAFF_CONFIG_SHEET + ' シートのヘッダー構成が既存データと一致しないため自動更新をスキップしました。'
+        };
+      }
+    }
+  }
+
+  if (opts.seedFromReservations === false) {
+    return {
+      sheet: sheet,
+      created: created,
+      initialized: initialized,
+      appended: appended,
+      updated: updated,
+      skipped: false,
+      message: STAFF_CONFIG_SHEET + ' シートを準備しました。'
+    };
+  }
+
+  var refreshedValues = getSheetValues_(sheet);
+  var headers = refreshedValues[0] || [];
+  var headerMap = buildHeaderIndexMap_(headers);
+  if (getHeaderIndex_(headerMap, '有効') < 0) {
+    sheet.getRange(1, STAFF_CONFIG_HEADERS.length).setValue('有効');
+    refreshedValues = getSheetValues_(sheet);
+    headers = refreshedValues[0] || [];
+  }
+  var col = getStaffConfigColumnIndexes_(headers);
+  var suggestions = buildSuggestedStaffConfigRowsFromReservations_();
+  if (suggestions.length === 0) {
+    return {
+      sheet: sheet,
+      created: created,
+      initialized: initialized,
+      appended: appended,
+      updated: updated,
+      skipped: false,
+      message: STAFF_CONFIG_SHEET + ' シートを準備しました。予約データからの候補はまだありません。'
+    };
+  }
+
+  var rowIndexByName = {};
+  for (var r = 1; r < refreshedValues.length; r++) {
+    var existingName = String(refreshedValues[r][col.name] || '').trim();
+    if (existingName && !rowIndexByName.hasOwnProperty(existingName)) {
+      rowIndexByName[existingName] = r + 1;
+    }
+  }
+
+  for (var s = 0; s < suggestions.length; s++) {
+    var item = suggestions[s];
+    var rowIndex = rowIndexByName[item.name];
+    if (!rowIndex) {
+      var newRow = ['', '', '', '', '', ''];
+      newRow[col.name] = item.name;
+      newRow[col.mainLane] = item.mainLane;
+      newRow[col.workStart] = item.workStart;
+      newRow[col.workEnd] = item.workEnd;
+      newRow[col.workDow] = item.workDow;
+      if (col.enabled >= 0) newRow[col.enabled] = item.enabled;
+      sheet.appendRow(newRow);
+      appended++;
+      continue;
+    }
+
+    var currentRow = sheet.getRange(rowIndex, 1, 1, Math.max(headers.length, STAFF_CONFIG_HEADERS.length)).getValues()[0];
+    var dirty = false;
+    if (!String(currentRow[col.mainLane] || '').trim()) {
+      currentRow[col.mainLane] = item.mainLane;
+      dirty = true;
+    }
+    if (!currentRow[col.workStart]) {
+      currentRow[col.workStart] = item.workStart;
+      dirty = true;
+    }
+    if (!currentRow[col.workEnd]) {
+      currentRow[col.workEnd] = item.workEnd;
+      dirty = true;
+    }
+    if (!String(currentRow[col.workDow] || '').trim()) {
+      currentRow[col.workDow] = item.workDow;
+      dirty = true;
+    }
+    if (col.enabled >= 0 && currentRow[col.enabled] === '') {
+      currentRow[col.enabled] = item.enabled;
+      dirty = true;
+    }
+    if (dirty) {
+      sheet.getRange(rowIndex, 1, 1, currentRow.length).setValues([currentRow]);
+      updated++;
+    }
+  }
+
+  return {
+    sheet: sheet,
+    created: created,
+    initialized: initialized,
+    appended: appended,
+    updated: updated,
+    skipped: false,
+    message: STAFF_CONFIG_SHEET + ' を自動設定しました。追加 ' + appended + ' 件 / 補完 ' + updated + ' 件'
+  };
+}
+
+function setupStaffConfigSheet() {
+  return ensureStaffConfigSheet_({ seedFromReservations: true });
+}
+
+function setupStaffConfigSheetFromMenu() {
+  var result = setupStaffConfigSheet();
+  result.sheet.activate();
+  SpreadsheetApp.getUi().alert(result.message);
+}
+
+function openStaffConfigSheetFromMenu() {
+  var result = ensureStaffConfigSheet_({ seedFromReservations: true });
+  result.sheet.activate();
+  SpreadsheetApp.getUi().alert(result.message);
+}
+
+/**
+ * StaffConfig から有効行をパース（先頭一致の担当名で上書きされうる — 先勝ちで保持）
+ */
+function loadStaffOccupancyConfigs_() {
+  var setupResult = ensureStaffConfigSheet_({ seedFromReservations: true });
+  var sheet = setupResult.sheet;
+  if (!sheet) return [];
+
+  var data = getSheetValues_(sheet);
+  if (data.length < 2) return [];
+
+  var headers = data[0];
+  var col = getStaffConfigColumnIndexes_(headers);
+  if (col.name < 0 || col.mainLane < 0 || col.workStart < 0 || col.workEnd < 0 || col.workDow < 0) {
+    return [];
+  }
+
+  var seen = {};
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    if (col.enabled >= 0 && !isStaffConfigRowEnabled_(row[col.enabled])) continue;
+
+    var name = String(row[col.name] || '').trim();
+    if (!name) continue;
+
+    var mainLane = normalizeOccupancyLaneValue_(row[col.mainLane]);
+    if (!mainLane) continue;
+
+    var startMin = parseTimeToMinutes_(row[col.workStart]);
+    var endMin = parseTimeToMinutes_(row[col.workEnd]);
+    if (startMin === null || endMin === null || endMin <= startMin) continue;
+
+    var dowMap = parseStaffWorkDayMap_(row[col.workDow]);
+    if (Object.keys(dowMap).length === 0) continue;
+
+    if (seen[name]) continue;
+    seen[name] = true;
+
+    list.push({
+      name: name,
+      mainLane: mainLane,
+      workStartMinutes: startMin,
+      workEndMinutes: endMin,
+      dowMap: dowMap
+    });
+  }
+
+  list.sort(function(a, b) {
+    return a.name.localeCompare(b.name, 'ja');
+  });
+
+  return list;
+}
+
+function findStaffOccupancyConfig_(staffName) {
+  var target = String(staffName || '').trim();
+  if (!target) return null;
+
+  var configs = loadStaffOccupancyConfigs_();
+  for (var i = 0; i < configs.length; i++) {
+    if (configs[i].name === target) return configs[i];
+  }
+  return null;
+}
+
+/**
+ * キャッシュ無効化用: 有効な担当名一覧
+ */
+function getOccupancyStaffNamesForCachePurge_() {
+  var configs = loadStaffOccupancyConfigs_();
+  var names = [];
+  for (var i = 0; i < configs.length; i++) {
+    names.push(configs[i].name);
+  }
+  return names;
+}
+
+/**
+ * 稼働率タブ用スタッフ一覧（フロント初期表示）
+ * @return {{ staff: Array<{name: string, mainLane: string}> }}
+ */
+function getOccupancyStaffList() {
+  try {
+    var configs = loadStaffOccupancyConfigs_();
+    var staff = configs.map(function(c) {
+      return { name: c.name, mainLane: c.mainLane };
+    });
+    return { staff: staff };
+  } catch (error) {
+    console.error('getOccupancyStaffList error:', error);
+    return { staff: [] };
+  }
+}
+
+/**
+ * 対象日の勤務枠（分）と店舗営業9-18時の積集合
+ */
+function getStaffEffectiveShiftMinutesForDay_(staffCfg, dayOfWeekIndex, businessStart, businessEnd) {
+  if (dayOfWeekIndex < 0 || dayOfWeekIndex > 5) return null;
+  if (!staffCfg.dowMap[dayOfWeekIndex]) return null;
+
+  var clipped = clipIntervalToBusinessHours_(
+    staffCfg.workStartMinutes,
+    staffCfg.workEndMinutes,
+    businessStart,
+    businessEnd
+  );
+  return clipped;
+}
+
 function invalidateAnalysisCaches_(yearMonth) {
   if (!isValidYearMonth_(yearMonth)) return;
 
@@ -657,6 +1192,13 @@ function invalidateAnalysisCaches_(yearMonth) {
     ['monthlySales', yearMonth].join(':'),
     ['occupancyAnalysis', yearMonth].join(':')
   ];
+
+  var staffNames = getOccupancyStaffNamesForCachePurge_();
+  for (var s = 0; s < staffNames.length; s++) {
+    keys.push(
+      ['occupancyAnalysis', yearMonth, occupancyStaffCacheKey_(staffNames[s])].join(':')
+    );
+  }
 
   try {
     cache.removeAll(keys);
@@ -771,7 +1313,8 @@ function getInitialData(yearMonth) {
         reservations: [],
         summary: createEmptySummary_(),
         selectedYearMonth: yearMonth || '',
-        diagnostics: diagnostics
+        diagnostics: diagnostics,
+        occupancyStaffList: getOccupancyStaffList().staff
       };
     }
 
@@ -854,7 +1397,8 @@ function getInitialData(yearMonth) {
       reservations: filteredReservations,
       summary: summary,
       selectedYearMonth: selectedYM,
-      diagnostics: diagnostics
+      diagnostics: diagnostics,
+      occupancyStaffList: getOccupancyStaffList().staff
     };
   } catch (error) {
     console.error('getInitialData error:', error);
@@ -2405,24 +2949,68 @@ function getMenuAnalysisForYear(year) {
 }
 
 /**
- * 稼働率分析データを取得（月次）
+ * 稼働率分析データを取得（月次・スタッフ別メインレーン）
  * @param {string} yearMonth - 対象年月（yyyy-MM）
+ * @param {string} staffName - StaffConfig の担当名（完全一致）
  * @return {Object}
  */
-function getOccupancyAnalysis(yearMonth) {
+function getOccupancyAnalysis(yearMonth, staffName) {
   try {
     if (!isValidYearMonth_(yearMonth)) {
       throw new Error('年月は yyyy-MM 形式で指定してください');
     }
 
-    var cacheKey = ['occupancyAnalysis', yearMonth].join(':');
+    var staffTrimmed = String(staffName || '').trim();
+    if (!staffTrimmed) {
+      throw new Error('スタッフを選択してください');
+    }
+
+    var cacheKey = ['occupancyAnalysis', yearMonth, occupancyStaffCacheKey_(staffTrimmed)].join(':');
     return withCache_(cacheKey, 600, function() {
       var BUSINESS_START = 9 * 60;
       var BUSINESS_END = 18 * 60;
-      var BUSINESS_DAY_MINUTES = BUSINESS_END - BUSINESS_START;
+
       var emptyResult = createEmptyOccupancyAnalysis_();
       var calendar = buildOccupancyCalendar_(yearMonth);
-      emptyResult.summary.businessDayCount = calendar.businessDayCount;
+
+      var staffCfg = findStaffOccupancyConfig_(staffTrimmed);
+      if (!staffCfg) {
+        emptyResult.summary.note =
+          'スタッフ「' + staffTrimmed + '」の設定が ' + STAFF_CONFIG_SHEET + ' に見つかりません。';
+        return emptyResult;
+      }
+
+      emptyResult.summary.staffName = staffCfg.name;
+
+      var staffDayMap = {};
+      var totalShiftMinutes = 0;
+
+      for (var ord = 0; ord < calendar.orderedKeys.length; ord++) {
+        var dayKey0 = calendar.orderedKeys[ord];
+        var baseDay = calendar.dayMap[dayKey0];
+        var shift = getStaffEffectiveShiftMinutesForDay_(
+          staffCfg,
+          baseDay.dayOfWeekIndex,
+          BUSINESS_START,
+          BUSINESS_END
+        );
+        if (!shift) continue;
+
+        var cap = shift[1] - shift[0];
+        totalShiftMinutes += cap;
+        staffDayMap[dayKey0] = {
+          dayOfWeekIndex: baseDay.dayOfWeekIndex,
+          shift: shift,
+          capacityMinutes: cap,
+          intervals: []
+        };
+      }
+
+      if (totalShiftMinutes <= 0) {
+        emptyResult.summary.note = '対象月に勤務日がありません（勤務曜日・時間を確認してください）。';
+        emptyResult.summary.staffName = staffCfg.name;
+        return emptyResult;
+      }
 
       var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
       var sheet = ss.getSheetByName(SHEET_NAME);
@@ -2446,9 +3034,7 @@ function getOccupancyAnalysis(yearMonth) {
         );
       }
 
-      if (calendar.businessDayCount === 0) {
-        return emptyResult;
-      }
+      var laneFilter = col.lane >= 0;
 
       for (var i = 1; i < data.length; i++) {
         var row = data[i];
@@ -2458,6 +3044,13 @@ function getOccupancyAnalysis(yearMonth) {
 
         var ym = formatYearMonth_(dateValue);
         if (ym !== yearMonth) continue;
+
+        var rowStaff = String(row[col.staff] || '').trim();
+        if (rowStaff !== staffCfg.name) continue;
+
+        if (laneFilter) {
+          if (!occupancyLanesMatch_(row[col.lane], staffCfg.mainLane)) continue;
+        }
 
         var dateObj = parseDateValue_(dateValue);
         if (!dateObj) continue;
@@ -2471,9 +3064,24 @@ function getOccupancyAnalysis(yearMonth) {
         if (!clipped) continue;
 
         var dayKey = Utilities.formatDate(dateObj, 'Asia/Tokyo', 'yyyy/MM/dd');
-        if (!calendar.dayMap[dayKey]) continue;
+        var sd = staffDayMap[dayKey];
+        if (!sd) continue;
 
-        calendar.dayMap[dayKey].intervals.push(clipped);
+        var shiftClipped = clipIntervalToBusinessHours_(
+          clipped[0],
+          clipped[1],
+          sd.shift[0],
+          sd.shift[1]
+        );
+        if (!shiftClipped) continue;
+
+        sd.intervals.push(shiftClipped);
+      }
+
+      var staffDayOrderedKeys = [];
+      for (var k = 0; k < calendar.orderedKeys.length; k++) {
+        var key2 = calendar.orderedKeys[k];
+        if (staffDayMap[key2]) staffDayOrderedKeys.push(key2);
       }
 
       var dayLabels = ['月', '火', '水', '木', '金', '土', '日'];
@@ -2481,13 +3089,15 @@ function getOccupancyAnalysis(yearMonth) {
         return { label: label, occupancy: 0, count: 0 };
       });
       var dayOccupiedMinutes = [0, 0, 0, 0, 0, 0, 0];
+      var dayCapacityMinutes = [0, 0, 0, 0, 0, 0, 0];
       var hourOccupiedMinutes = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+      var hourCapacityMinutes = [0, 0, 0, 0, 0, 0, 0, 0, 0];
       var totalOccupiedMinutes = 0;
 
-      for (var k = 0; k < calendar.orderedKeys.length; k++) {
-        var key = calendar.orderedKeys[k];
-        var dayInfo = calendar.dayMap[key];
-        var merged = mergeTimeIntervals_(dayInfo.intervals);
+      for (var k2 = 0; k2 < staffDayOrderedKeys.length; k2++) {
+        var dkey = staffDayOrderedKeys[k2];
+        var dayBlock = staffDayMap[dkey];
+        var merged = mergeTimeIntervals_(dayBlock.intervals);
         var occupiedMinutes = 0;
 
         for (var m = 0; m < merged.length; m++) {
@@ -2502,37 +3112,51 @@ function getOccupancyAnalysis(yearMonth) {
         }
 
         totalOccupiedMinutes += occupiedMinutes;
-        dayBuckets[dayInfo.dayOfWeekIndex].count++;
-        dayOccupiedMinutes[dayInfo.dayOfWeekIndex] += occupiedMinutes;
+        var dowIdx = dayBlock.dayOfWeekIndex;
+        dayBuckets[dowIdx].count++;
+        dayOccupiedMinutes[dowIdx] += occupiedMinutes;
+        dayCapacityMinutes[dowIdx] += dayBlock.capacityMinutes;
+      }
+
+      for (var h = 0; h < hourOccupiedMinutes.length; h++) {
+        var hStart = BUSINESS_START + h * 60;
+        var hEnd = hStart + 60;
+        for (var k3 = 0; k3 < staffDayOrderedKeys.length; k3++) {
+          var dkey2 = staffDayOrderedKeys[k3];
+          var blk = staffDayMap[dkey2];
+          hourCapacityMinutes[h] += getOverlapMinutes_(blk.shift[0], blk.shift[1], hStart, hEnd);
+        }
       }
 
       for (var dow = 0; dow <= 5; dow++) {
-        if (dayBuckets[dow].count > 0) {
+        if (dayCapacityMinutes[dow] > 0) {
           dayBuckets[dow].occupancy = roundToOneDecimal_(
-            dayOccupiedMinutes[dow] / (dayBuckets[dow].count * BUSINESS_DAY_MINUTES) * 100
+            dayOccupiedMinutes[dow] / dayCapacityMinutes[dow] * 100
           );
         }
       }
 
       var byHour = [];
       for (var hour = 0; hour < hourOccupiedMinutes.length; hour++) {
+        var capH = hourCapacityMinutes[hour];
         byHour.push({
           label: (9 + hour) + '時',
-          occupancy: roundToOneDecimal_(
-            hourOccupiedMinutes[hour] / (calendar.businessDayCount * 60) * 100
-          )
+          occupancy: capH > 0
+            ? roundToOneDecimal_(hourOccupiedMinutes[hour] / capH * 100)
+            : 0
         });
       }
 
+      var workDayCount = staffDayOrderedKeys.length;
       var summary = {
-        average: roundToOneDecimal_(
-          totalOccupiedMinutes / (calendar.businessDayCount * BUSINESS_DAY_MINUTES) * 100
-        ),
+        average: roundToOneDecimal_(totalOccupiedMinutes / totalShiftMinutes * 100),
         peakDow: '',
         peakHour: '',
         lowDow: '',
         lowHour: '',
-        businessDayCount: calendar.businessDayCount
+        businessDayCount: workDayCount,
+        availableMinutes: totalShiftMinutes,
+        staffName: staffCfg.name
       };
 
       var peakDowValue = null;
@@ -2551,7 +3175,7 @@ function getOccupancyAnalysis(yearMonth) {
         }
       }
 
-      if (calendar.businessDayCount > 0) {
+      if (workDayCount > 0) {
         var peakHourValue = null;
         var lowHourValue = null;
         for (var hourEntryIndex = 0; hourEntryIndex < byHour.length; hourEntryIndex++) {
