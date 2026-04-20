@@ -496,6 +496,179 @@ function getPreviousMonth_(yearMonth) {
   return Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy-MM');
 }
 
+function parseDateValue_(dateValue) {
+  if (!dateValue) return null;
+
+  if (dateValue instanceof Date) {
+    if (isNaN(dateValue.getTime())) return null;
+    return new Date(dateValue.getFullYear(), dateValue.getMonth(), dateValue.getDate());
+  }
+
+  var match = String(dateValue).trim().match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+  if (!match) return null;
+
+  return new Date(
+    parseInt(match[1], 10),
+    parseInt(match[2], 10) - 1,
+    parseInt(match[3], 10)
+  );
+}
+
+function parseTimeToMinutes_(timeValue) {
+  if (timeValue === null || timeValue === undefined || timeValue === '') return null;
+
+  if (timeValue instanceof Date) {
+    if (isNaN(timeValue.getTime())) return null;
+    return timeValue.getHours() * 60 + timeValue.getMinutes();
+  }
+
+  if (typeof timeValue === 'number' && isFinite(timeValue)) {
+    if (timeValue >= 0 && timeValue < 1) {
+      return Math.round(timeValue * 24 * 60);
+    }
+    return Math.round(timeValue);
+  }
+
+  var match = String(timeValue).trim().match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+
+  var hours = parseInt(match[1], 10);
+  var minutes = parseInt(match[2], 10);
+  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function clipIntervalToBusinessHours_(startMinutes, endMinutes, businessStart, businessEnd) {
+  if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) return null;
+
+  var clippedStart = Math.max(startMinutes, businessStart);
+  var clippedEnd = Math.min(endMinutes, businessEnd);
+  if (clippedEnd <= clippedStart) return null;
+
+  return [clippedStart, clippedEnd];
+}
+
+function mergeTimeIntervals_(intervals) {
+  if (!intervals || intervals.length === 0) return [];
+
+  var sorted = intervals.slice().sort(function(a, b) {
+    return a[0] - b[0];
+  });
+  var merged = [sorted[0].slice()];
+
+  for (var i = 1; i < sorted.length; i++) {
+    var current = sorted[i];
+    var last = merged[merged.length - 1];
+    if (current[0] <= last[1]) {
+      last[1] = Math.max(last[1], current[1]);
+    } else {
+      merged.push(current.slice());
+    }
+  }
+
+  return merged;
+}
+
+function getOverlapMinutes_(intervalStart, intervalEnd, rangeStart, rangeEnd) {
+  return Math.max(0, Math.min(intervalEnd, rangeEnd) - Math.max(intervalStart, rangeStart));
+}
+
+function roundToOneDecimal_(value) {
+  return Math.round(value * 10) / 10;
+}
+
+function getBusinessDayOfWeekIndex_(dateObj) {
+  if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return -1;
+
+  var isoDay = parseInt(Utilities.formatDate(dateObj, 'Asia/Tokyo', 'u'), 10);
+  if (isNaN(isoDay)) return -1;
+
+  return isoDay - 1;
+}
+
+function createEmptyOccupancyAnalysis_() {
+  var dayLabels = ['月', '火', '水', '木', '金', '土', '日'];
+  var byDayOfWeek = dayLabels.map(function(label) {
+    return { label: label, occupancy: 0, count: 0 };
+  });
+
+  var byHour = [];
+  for (var hour = 9; hour <= 17; hour++) {
+    byHour.push({ label: hour + '時', occupancy: 0 });
+  }
+
+  return {
+    byDayOfWeek: byDayOfWeek,
+    byHour: byHour,
+    summary: {
+      average: 0,
+      peakDow: '',
+      peakHour: '',
+      lowDow: '',
+      lowHour: '',
+      businessDayCount: 0
+    }
+  };
+}
+
+function buildOccupancyCalendar_(yearMonth) {
+  var date = yearMonthToDate_(yearMonth);
+  var nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+  var cursor = new Date(date.getTime());
+  var dayMap = {};
+  var orderedKeys = [];
+  var businessDayCount = 0;
+
+  while (cursor < nextMonth) {
+    var dowIndex = getBusinessDayOfWeekIndex_(cursor);
+    if (dowIndex >= 0 && dowIndex <= 5) {
+      var key = Utilities.formatDate(cursor, 'Asia/Tokyo', 'yyyy/MM/dd');
+      dayMap[key] = {
+        dayOfWeekIndex: dowIndex,
+        intervals: []
+      };
+      orderedKeys.push(key);
+      businessDayCount++;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return {
+    dayMap: dayMap,
+    orderedKeys: orderedKeys,
+    businessDayCount: businessDayCount
+  };
+}
+
+function invalidateAnalysisCaches_(yearMonth) {
+  if (!isValidYearMonth_(yearMonth)) return;
+
+  var year = parseInt(String(yearMonth).substring(0, 4), 10);
+  var cache = CacheService.getScriptCache();
+  var keys = [
+    ['analysisBundle', yearMonth, 12].join(':'),
+    ['analysisBundleYear', year].join(':'),
+    ['customerAnalysisYear', year].join(':'),
+    ['salesTrendYear', year].join(':'),
+    ['menuAnalysisYear', year].join(':'),
+    ['monthlySales', yearMonth].join(':'),
+    ['occupancyAnalysis', yearMonth].join(':')
+  ];
+
+  try {
+    cache.removeAll(keys);
+  } catch (error) {
+    for (var i = 0; i < keys.length; i++) {
+      try {
+        cache.remove(keys[i]);
+      } catch (removeError) {}
+    }
+  }
+}
+
 /**
  * CacheService を用いた汎用キャッシュヘルパー（JSONシリアライズ）
  * @param {string} key - キャッシュキー
@@ -941,6 +1114,8 @@ function updateReservation(rowIndex, updates) {
     var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     var col = getColumnIndexes_(headers, []);
+    var currentRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var targetYearMonth = col.date >= 0 ? formatYearMonth_(currentRow[col.date]) : '';
     
     var fieldMap = {
       amount: col.amount,
@@ -961,6 +1136,7 @@ function updateReservation(rowIndex, updates) {
     }
     
     SpreadsheetApp.flush();
+    invalidateAnalysisCaches_(targetYearMonth);
     return { success: true };
     
   } catch (error) {
@@ -2225,6 +2401,181 @@ function getMenuAnalysisForYear(year) {
   } catch (error) {
     console.error('getMenuAnalysisForYear error:', error);
     throw new Error('メニュー分析（年次）取得エラー: ' + error.message);
+  }
+}
+
+/**
+ * 稼働率分析データを取得（月次）
+ * @param {string} yearMonth - 対象年月（yyyy-MM）
+ * @return {Object}
+ */
+function getOccupancyAnalysis(yearMonth) {
+  try {
+    if (!isValidYearMonth_(yearMonth)) {
+      throw new Error('年月は yyyy-MM 形式で指定してください');
+    }
+
+    var cacheKey = ['occupancyAnalysis', yearMonth].join(':');
+    return withCache_(cacheKey, 600, function() {
+      var BUSINESS_START = 9 * 60;
+      var BUSINESS_END = 18 * 60;
+      var BUSINESS_DAY_MINUTES = BUSINESS_END - BUSINESS_START;
+      var emptyResult = createEmptyOccupancyAnalysis_();
+      var calendar = buildOccupancyCalendar_(yearMonth);
+      emptyResult.summary.businessDayCount = calendar.businessDayCount;
+
+      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var sheet = ss.getSheetByName(SHEET_NAME);
+      if (!sheet) {
+        throw new Error('シートが見つかりません: ' + SHEET_NAME);
+      }
+
+      var data = getSheetValues_(sheet);
+      if (data.length < 1) {
+        return emptyResult;
+      }
+
+      var headers = data[0];
+      var rows = data.slice(1);
+      var col = getColumnIndexes_(headers, rows);
+      assertReservationSheetSchema_(headers, col, rows);
+      if (col.start < 0 || col.end < 0) {
+        throw new Error(
+          'Reservationsシートの列名が一致しません。不足: 開始, 終了' +
+          (headers.length ? ' / 実際のヘッダ: ' + formatHeaderList_(headers) : '')
+        );
+      }
+
+      if (calendar.businessDayCount === 0) {
+        return emptyResult;
+      }
+
+      for (var i = 1; i < data.length; i++) {
+        var row = data[i];
+        var dateValue = row[col.date];
+        if (!dateValue) continue;
+        if (!isIncludedReservationStatus_(row[col.status])) continue;
+
+        var ym = formatYearMonth_(dateValue);
+        if (ym !== yearMonth) continue;
+
+        var dateObj = parseDateValue_(dateValue);
+        if (!dateObj) continue;
+
+        var dayOfWeekIndex = getBusinessDayOfWeekIndex_(dateObj);
+        if (dayOfWeekIndex < 0 || dayOfWeekIndex > 5) continue;
+
+        var startMinutes = parseTimeToMinutes_(row[col.start]);
+        var endMinutes = parseTimeToMinutes_(row[col.end]);
+        var clipped = clipIntervalToBusinessHours_(startMinutes, endMinutes, BUSINESS_START, BUSINESS_END);
+        if (!clipped) continue;
+
+        var dayKey = Utilities.formatDate(dateObj, 'Asia/Tokyo', 'yyyy/MM/dd');
+        if (!calendar.dayMap[dayKey]) continue;
+
+        calendar.dayMap[dayKey].intervals.push(clipped);
+      }
+
+      var dayLabels = ['月', '火', '水', '木', '金', '土', '日'];
+      var dayBuckets = dayLabels.map(function(label) {
+        return { label: label, occupancy: 0, count: 0 };
+      });
+      var dayOccupiedMinutes = [0, 0, 0, 0, 0, 0, 0];
+      var hourOccupiedMinutes = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+      var totalOccupiedMinutes = 0;
+
+      for (var k = 0; k < calendar.orderedKeys.length; k++) {
+        var key = calendar.orderedKeys[k];
+        var dayInfo = calendar.dayMap[key];
+        var merged = mergeTimeIntervals_(dayInfo.intervals);
+        var occupiedMinutes = 0;
+
+        for (var m = 0; m < merged.length; m++) {
+          var interval = merged[m];
+          occupiedMinutes += interval[1] - interval[0];
+
+          for (var hourIndex = 0; hourIndex < hourOccupiedMinutes.length; hourIndex++) {
+            var hourStart = BUSINESS_START + hourIndex * 60;
+            var hourEnd = hourStart + 60;
+            hourOccupiedMinutes[hourIndex] += getOverlapMinutes_(interval[0], interval[1], hourStart, hourEnd);
+          }
+        }
+
+        totalOccupiedMinutes += occupiedMinutes;
+        dayBuckets[dayInfo.dayOfWeekIndex].count++;
+        dayOccupiedMinutes[dayInfo.dayOfWeekIndex] += occupiedMinutes;
+      }
+
+      for (var dow = 0; dow <= 5; dow++) {
+        if (dayBuckets[dow].count > 0) {
+          dayBuckets[dow].occupancy = roundToOneDecimal_(
+            dayOccupiedMinutes[dow] / (dayBuckets[dow].count * BUSINESS_DAY_MINUTES) * 100
+          );
+        }
+      }
+
+      var byHour = [];
+      for (var hour = 0; hour < hourOccupiedMinutes.length; hour++) {
+        byHour.push({
+          label: (9 + hour) + '時',
+          occupancy: roundToOneDecimal_(
+            hourOccupiedMinutes[hour] / (calendar.businessDayCount * 60) * 100
+          )
+        });
+      }
+
+      var summary = {
+        average: roundToOneDecimal_(
+          totalOccupiedMinutes / (calendar.businessDayCount * BUSINESS_DAY_MINUTES) * 100
+        ),
+        peakDow: '',
+        peakHour: '',
+        lowDow: '',
+        lowHour: '',
+        businessDayCount: calendar.businessDayCount
+      };
+
+      var peakDowValue = null;
+      var lowDowValue = null;
+      for (var dayIndex = 0; dayIndex <= 5; dayIndex++) {
+        var dayEntry = dayBuckets[dayIndex];
+        if (dayEntry.count <= 0) continue;
+
+        if (peakDowValue === null || dayEntry.occupancy > peakDowValue) {
+          peakDowValue = dayEntry.occupancy;
+          summary.peakDow = dayEntry.label;
+        }
+        if (lowDowValue === null || dayEntry.occupancy < lowDowValue) {
+          lowDowValue = dayEntry.occupancy;
+          summary.lowDow = dayEntry.label;
+        }
+      }
+
+      if (calendar.businessDayCount > 0) {
+        var peakHourValue = null;
+        var lowHourValue = null;
+        for (var hourEntryIndex = 0; hourEntryIndex < byHour.length; hourEntryIndex++) {
+          var hourEntry = byHour[hourEntryIndex];
+          if (peakHourValue === null || hourEntry.occupancy > peakHourValue) {
+            peakHourValue = hourEntry.occupancy;
+            summary.peakHour = hourEntry.label;
+          }
+          if (lowHourValue === null || hourEntry.occupancy < lowHourValue) {
+            lowHourValue = hourEntry.occupancy;
+            summary.lowHour = hourEntry.label;
+          }
+        }
+      }
+
+      return {
+        byDayOfWeek: dayBuckets,
+        byHour: byHour,
+        summary: summary
+      };
+    });
+  } catch (error) {
+    console.error('getOccupancyAnalysis error:', error);
+    throw new Error('稼働率分析取得エラー: ' + error.message);
   }
 }
 

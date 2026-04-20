@@ -1650,6 +1650,7 @@
             <button class="sub-tab" data-sub="customers">顧客分析</button>
             <button class="sub-tab" data-sub="sales">売上トレンド</button>
             <button class="sub-tab" data-sub="menu">メニュー分析</button>
+            <button class="sub-tab" data-sub="occupancy">稼働率</button>
           </div>
           <div class="analysis-main">
             <!-- ダッシュボード -->
@@ -1752,6 +1753,48 @@
                     <!-- メニュー分析がここに入る -->
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            <!-- 稼働率 -->
+            <div class="sub-content" id="occupancyContent">
+              <div id="occupancyMonthView">
+                <div class="kpi-grid">
+                  <div class="kpi-card">
+                    <div class="kpi-label">月平均稼働率</div>
+                    <div class="kpi-value" id="kpiAvgOccupancy">-</div>
+                    <div class="kpi-sub" id="kpiAvgOccupancyNote">営業日 0日</div>
+                  </div>
+                  <div class="kpi-card">
+                    <div class="kpi-label">稼働率 最高曜日</div>
+                    <div class="kpi-value" id="kpiPeakDow">-</div>
+                    <div class="kpi-sub" id="kpiLowDow">最低曜日 -</div>
+                  </div>
+                  <div class="kpi-card">
+                    <div class="kpi-label">稼働率 最高時間帯</div>
+                    <div class="kpi-value" id="kpiPeakHour">-</div>
+                    <div class="kpi-sub" id="kpiLowHour">最低時間帯 -</div>
+                  </div>
+                </div>
+                <div class="chart-card">
+                  <div class="chart-title">📅 曜日別 平均稼働率</div>
+                  <div class="chart-container">
+                    <canvas id="dowChart"></canvas>
+                  </div>
+                </div>
+                <div class="chart-card">
+                  <div class="chart-title">🕘 時間帯別 平均稼働率</div>
+                  <div class="chart-container">
+                    <canvas id="hourChart"></canvas>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-card" id="occupancyYearNotice" hidden>
+                <div class="chart-title">📊 稼働率</div>
+                <div class="empty-state">
+                  <div class="empty-state-icon">🗓️</div>
+                  <p id="occupancyYearNoticeText">月を選択すると稼働率を表示します。</p>
+                </div>
               </div>
             </div>
           </div>
@@ -1949,6 +1992,8 @@
     let salesTrendChart = null;
     let countTrendChart = null;
     let menuPieChart = null;
+    let dowChart = null;
+    let hourChart = null;
     // 予約データキャッシュ（年月ごと）
     const reservationCache = {};
     // フロント側キャッシュ
@@ -1956,7 +2001,8 @@
     const analysisSubCache = {
       sales: {},      // { [ym]: trend }
       customers: {},  // { [ym]: customerAnalysis }
-      menu: {}        // { [ym]: menuAnalysis }
+      menu: {},       // { [ym]: menuAnalysis }
+      occupancy: {}   // { [ym]: occupancyAnalysis }
     };
     const annualSalesCache = {}; // { [year]: total }
     const monthlySalesCache = {}; // { [ym]: total }
@@ -3015,6 +3061,7 @@
       
       try {
         showLoading();
+        const targetYearMonth = selectedReservation.yearMonth || currentFilters.yearMonth || '';
         
         const updates = {
           amount: parseInt(document.getElementById('editAmount').value) || 0,
@@ -3040,8 +3087,11 @@
           }
         });
 
+        invalidateDerivedCaches_(targetYearMonth);
+
         // 集計・表示を再計算（選択は維持）
         await loadReservations({ preserveSelection: true });
+        await loadAnnualSalesHeader();
       } catch (error) {
         console.error('Save error:', error);
         showUserError('保存エラー: ' + error.message);
@@ -3133,6 +3183,18 @@
             analysisSubCache.menu[period.key] = data;
           }
           renderMenuAnalysis(data);
+        } else if (sub === 'occupancy') {
+          if (period.type === 'year') {
+            renderOccupancyUnavailable('月を選択すると稼働率を表示します。');
+            return;
+          }
+
+          let data = analysisSubCache.occupancy[period.key];
+          if (!data) {
+            data = await runGAS('getOccupancyAnalysis', period.yearMonth);
+            analysisSubCache.occupancy[period.key] = data;
+          }
+          renderOccupancyCharts(data);
         }
       } catch (error) {
         console.error('Sub tab load error:', error);
@@ -3488,6 +3550,128 @@
           <td>${m.percentage}%</td>
         </tr>
       `).join('');
+    }
+
+    function destroyOccupancyCharts_() {
+      if (dowChart) {
+        dowChart.destroy();
+        dowChart = null;
+      }
+      if (hourChart) {
+        hourChart.destroy();
+        hourChart = null;
+      }
+    }
+
+    function renderOccupancyUnavailable(message) {
+      destroyOccupancyCharts_();
+      document.getElementById('occupancyMonthView').hidden = true;
+      document.getElementById('occupancyYearNotice').hidden = false;
+      document.getElementById('occupancyYearNoticeText').textContent = message;
+    }
+
+    function renderOccupancyBarChart(canvasId, currentChart, labels, values, yLabel) {
+      if (currentChart) {
+        currentChart.destroy();
+      }
+
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      return new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: yLabel,
+            data: values,
+            backgroundColor: values.map(value =>
+              value >= 80 ? 'rgba(22, 163, 74, 0.75)' :
+              value >= 50 ? 'rgba(37, 99, 235, 0.75)' :
+                            'rgba(249, 115, 22, 0.78)'
+            ),
+            borderColor: values.map(value =>
+              value >= 80 ? '#16a34a' :
+              value >= 50 ? '#2563eb' :
+                            '#f97316'
+            ),
+            borderWidth: 1,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100,
+              ticks: {
+                callback: function(value) {
+                  return value + '%';
+                }
+              },
+              title: {
+                display: true,
+                text: yLabel
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderOccupancyCharts(data) {
+      document.getElementById('occupancyMonthView').hidden = false;
+      document.getElementById('occupancyYearNotice').hidden = true;
+
+      document.getElementById('kpiAvgOccupancy').textContent = `${(data.summary.average || 0).toFixed(1)}%`;
+      document.getElementById('kpiAvgOccupancyNote').textContent = `営業日 ${data.summary.businessDayCount || 0}日`;
+      document.getElementById('kpiPeakDow').textContent = data.summary.peakDow || '-';
+      document.getElementById('kpiLowDow').textContent = `最低曜日 ${data.summary.lowDow || '-'}`;
+      document.getElementById('kpiPeakHour').textContent = data.summary.peakHour || '-';
+      document.getElementById('kpiLowHour').textContent = `最低時間帯 ${data.summary.lowHour || '-'}`;
+
+      dowChart = renderOccupancyBarChart(
+        'dowChart',
+        dowChart,
+        data.byDayOfWeek.map(item => item.label),
+        data.byDayOfWeek.map(item => item.occupancy),
+        '稼働率 (%)'
+      );
+      hourChart = renderOccupancyBarChart(
+        'hourChart',
+        hourChart,
+        data.byHour.map(item => item.label),
+        data.byHour.map(item => item.occupancy),
+        '稼働率 (%)'
+      );
+    }
+
+    function clearObjectEntries_(target) {
+      Object.keys(target).forEach(key => delete target[key]);
+    }
+
+    function invalidateDerivedCaches_(yearMonth) {
+      clearObjectEntries_(analysisCache);
+      clearObjectEntries_(analysisSubCache.sales);
+      clearObjectEntries_(analysisSubCache.customers);
+      clearObjectEntries_(analysisSubCache.menu);
+      clearObjectEntries_(analysisSubCache.occupancy);
+
+      if (yearMonth) {
+        delete reservationCache[yearMonth];
+        delete monthlySalesCache[yearMonth];
+        const year = String(yearMonth).split('-')[0];
+        if (year) {
+          delete annualSalesCache[year];
+        }
+      } else {
+        clearObjectEntries_(monthlySalesCache);
+        clearObjectEntries_(annualSalesCache);
+      }
     }
 
     // ========================================
