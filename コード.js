@@ -1,5 +1,5 @@
 /**
- * 経営みえる化くん - 予約管理・経営分析システム
+ * 経営みえるかくんv2 - 予約管理・経営分析システム
  * Google Apps Script バックエンド
  * 
  * Phase 1: モード切替UI + 経理モード ✅
@@ -11,6 +11,7 @@
 // 設定
 // ========================================
 var SPREADSHEET_ID = '1mB_iNBgxV97TzKp3n9nReBRdZhUzLONN3RTi8HIXp1k';
+var APP_TITLE = '経営みえるかくんv2';
 var SHEET_NAME = 'Reservations';
 var PATIENTS_SHEET = 'Patients';
 var EXPENSES_SHEET = 'Expenses';  // Phase 3で使用
@@ -21,7 +22,7 @@ var ANNUAL_PLAN_SHEET = 'AnnualPlans'; // 年次の予算/計画（CF用）
 // ========================================
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('index')
-    .setTitle('経営みえる化くん')
+    .setTitle(APP_TITLE)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -212,6 +213,152 @@ function formatHeaderList_(headers) {
       return header !== '';
     })
     .join(', ');
+}
+
+function getMissingHeaderLabels_(headerMap, labels) {
+  var missing = [];
+  for (var i = 0; i < labels.length; i++) {
+    if (getHeaderIndex_(headerMap, labels[i]) < 0) {
+      missing.push(labels[i]);
+    }
+  }
+  return missing;
+}
+
+function buildSchemaDiagnosticItem_(sheetName, status, message, headers) {
+  return {
+    sheetName: sheetName,
+    status: status,
+    message: message,
+    actualHeaders: headers && headers.length ? formatHeaderList_(headers) : ''
+  };
+}
+
+function diagnoseReservationSchema_(sheet) {
+  if (!sheet) {
+    return buildSchemaDiagnosticItem_(SHEET_NAME, 'error', 'シートが存在しません。', []);
+  }
+
+  var data = getSheetValues_(sheet);
+  var headers = data[0] || [];
+  var rows = data.slice(1);
+  var col = getColumnIndexes_(headers, rows);
+  var missing = [];
+
+  if (col.date < 0) missing.push('日付');
+  if (col.amount < 0) missing.push('金額');
+  if (col.patient < 0 && col.id < 0) missing.push('患者名 または ID');
+
+  if (missing.length > 0) {
+    return buildSchemaDiagnosticItem_(
+      SHEET_NAME,
+      'error',
+      '不足列: ' + missing.join(', '),
+      headers
+    );
+  }
+
+  if (rows.length === 0) {
+    return buildSchemaDiagnosticItem_(SHEET_NAME, 'warn', 'ヘッダーは正常ですがデータ行がありません。', headers);
+  }
+
+  for (var i = 0; i < rows.length; i++) {
+    if (hasCellValue_(rows[i], col.patient) || hasCellValue_(rows[i], col.id)) {
+      return buildSchemaDiagnosticItem_(SHEET_NAME, 'ok', '列構成は正常です。', headers);
+    }
+  }
+
+  return buildSchemaDiagnosticItem_(
+    SHEET_NAME,
+    'warn',
+    '患者名またはID列の読取値が見つかりません。データ位置を確認してください。',
+    headers
+  );
+}
+
+function diagnosePatientsSchema_(sheet) {
+  if (!sheet) {
+    return buildSchemaDiagnosticItem_(PATIENTS_SHEET, 'error', 'シートが存在しません。', []);
+  }
+
+  var data = getSheetValues_(sheet);
+  var headers = data[0] || [];
+  var headerMap = buildHeaderIndexMap_(headers);
+  var missing = getMissingHeaderLabels_(headerMap, ['患者ID', '患者名']);
+
+  if (missing.length > 0) {
+    return buildSchemaDiagnosticItem_(
+      PATIENTS_SHEET,
+      'error',
+      '不足列: ' + missing.join(', '),
+      headers
+    );
+  }
+
+  if (data.length < 2) {
+    return buildSchemaDiagnosticItem_(PATIENTS_SHEET, 'warn', 'ヘッダーは正常ですがデータ行がありません。', headers);
+  }
+
+  return buildSchemaDiagnosticItem_(PATIENTS_SHEET, 'ok', '列構成は正常です。', headers);
+}
+
+function diagnoseExpensesSchema_(sheet) {
+  if (!sheet) {
+    return buildSchemaDiagnosticItem_(EXPENSES_SHEET, 'warn', '未作成です。初回保存時に自動作成されます。', []);
+  }
+
+  var data = getSheetValues_(sheet);
+  var headers = data[0] || [];
+  var headerMap = buildHeaderIndexMap_(headers);
+  var missing = getMissingHeaderLabels_(headerMap, [
+    '年月',
+    '変動費',
+    '人件費',
+    'その他固定費',
+    '減価償却費',
+    '借入返済',
+    '設備投資'
+  ]);
+
+  if (missing.length > 0) {
+    return buildSchemaDiagnosticItem_(
+      EXPENSES_SHEET,
+      'warn',
+      '不足列: ' + missing.join(', '),
+      headers
+    );
+  }
+
+  if (data.length < 2) {
+    return buildSchemaDiagnosticItem_(EXPENSES_SHEET, 'warn', '列構成は正常ですが経費データは未登録です。', headers);
+  }
+
+  return buildSchemaDiagnosticItem_(EXPENSES_SHEET, 'ok', '列構成は正常です。', headers);
+}
+
+function getStartupSchemaDiagnostics_(ss) {
+  var items = [
+    diagnoseReservationSchema_(ss.getSheetByName(SHEET_NAME)),
+    diagnosePatientsSchema_(ss.getSheetByName(PATIENTS_SHEET)),
+    diagnoseExpensesSchema_(ss.getSheetByName(EXPENSES_SHEET))
+  ];
+
+  var summary = { ok: 0, warn: 0, error: 0 };
+  for (var i = 0; i < items.length; i++) {
+    if (summary.hasOwnProperty(items[i].status)) {
+      summary[items[i].status]++;
+    }
+  }
+
+  var overallStatus = summary.error > 0 ? 'error' : (summary.warn > 0 ? 'warn' : 'ok');
+  var summaryText = 'OK ' + summary.ok + ' / 確認 ' + summary.warn + ' / 要修正 ' + summary.error;
+
+  return {
+    overallStatus: overallStatus,
+    summary: summary,
+    summaryText: summaryText,
+    items: items
+  };
 }
 
 function assertReservationSheetSchema_(headers, col, rows) {
@@ -418,7 +565,9 @@ function getFilterOptions() {
  */
 function getInitialData(yearMonth) {
   try {
-    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var diagnostics = getStartupSchemaDiagnostics_(ss);
+    var sheet = ss.getSheetByName(SHEET_NAME);
     if (!sheet) {
       throw new Error('シートが見つかりません: ' + SHEET_NAME);
     }
@@ -428,7 +577,8 @@ function getInitialData(yearMonth) {
         filterOptions: { staff: [], menu: [], payment: [], status: [], yearMonths: [] },
         reservations: [],
         summary: createEmptySummary_(),
-        selectedYearMonth: yearMonth || ''
+        selectedYearMonth: yearMonth || '',
+        diagnostics: diagnostics
       };
     }
 
@@ -509,7 +659,8 @@ function getInitialData(yearMonth) {
       },
       reservations: filteredReservations,
       summary: summary,
-      selectedYearMonth: selectedYM
+      selectedYearMonth: selectedYM,
+      diagnostics: diagnostics
     };
   } catch (error) {
     console.error('getInitialData error:', error);

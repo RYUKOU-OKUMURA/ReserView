@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>経営みえる化くん</title>
+  <title>経営みえるかくんv2</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Sans:wght@500;600;700&display=swap" rel="stylesheet">
@@ -102,6 +102,12 @@
       gap: 20px;
     }
 
+    .brand-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
     .logo {
       font-family: 'Zen Kaku Gothic New', sans-serif;
       font-size: 20px;
@@ -114,6 +120,62 @@
     }
 
     .logo-icon { font-size: 22px; }
+
+    .schema-diagnostics {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      min-height: 20px;
+    }
+
+    .schema-diagnostics[hidden] {
+      display: none;
+    }
+
+    .schema-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-light);
+      letter-spacing: 0.02em;
+    }
+
+    .schema-summary {
+      font-size: 11px;
+      color: var(--text-light);
+    }
+
+    .schema-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+
+    .schema-chip.ok {
+      color: var(--success);
+      background: var(--success-light);
+      border-color: rgba(22, 163, 74, 0.18);
+    }
+
+    .schema-chip.warn {
+      color: #a16207;
+      background: var(--warning-light);
+      border-color: rgba(234, 179, 8, 0.25);
+    }
+
+    .schema-chip.error {
+      color: var(--danger);
+      background: var(--danger-light);
+      border-color: rgba(220, 38, 38, 0.16);
+    }
 
     .header-month {
       display: flex;
@@ -1469,9 +1531,12 @@
     <!-- ヘッダー -->
   <header class="header">
     <div class="header-left">
-      <div class="logo">
-        <span class="logo-icon">📊</span>
-        経営みえる化くん
+      <div class="brand-block">
+        <div class="logo">
+          <span class="logo-icon">📊</span>
+          経営みえるかくんv2
+        </div>
+        <div class="schema-diagnostics" id="schemaDiagnostics" hidden></div>
       </div>
       <div class="header-month">
         <select id="globalYear"></select>
@@ -1876,6 +1941,7 @@
     };
     let currentMode = 'accounting';
     let currentSubTab = 'dashboard';
+    let schemaDiagnostics = null;
     
     // Chart.jsインスタンス
     let salesChart = null;
@@ -1946,6 +2012,7 @@
         // 初期データをまとめて取得
         const initialData = await runGAS('getInitialData');
         filterOptions = initialData.filterOptions || filterOptions;
+        renderSchemaDiagnostics(initialData.diagnostics);
         currentFilters.yearMonth = initialData.selectedYearMonth || currentFilters.yearMonth;
         if (currentFilters.yearMonth) {
           const parts = String(currentFilters.yearMonth).split('-');
@@ -2001,6 +2068,56 @@
 
     function showUserError(message) {
       alert(message);
+    }
+
+    function getDiagnosticStatusLabel_(status) {
+      switch (status) {
+        case 'error':
+          return '要修正';
+        case 'warn':
+          return '確認';
+        default:
+          return 'OK';
+      }
+    }
+
+    function renderSchemaDiagnostics(diagnostics) {
+      const container = document.getElementById('schemaDiagnostics');
+      if (!container) return;
+
+      container.innerHTML = '';
+      schemaDiagnostics = diagnostics || null;
+
+      if (!diagnostics || !Array.isArray(diagnostics.items) || diagnostics.items.length === 0) {
+        container.hidden = true;
+        return;
+      }
+
+      const label = document.createElement('span');
+      label.className = 'schema-label';
+      label.textContent = '起動診断';
+      container.appendChild(label);
+
+      diagnostics.items.forEach(item => {
+        const chip = document.createElement('span');
+        chip.className = `schema-chip ${item.status || 'ok'}`;
+        chip.textContent = `${item.sheetName}: ${getDiagnosticStatusLabel_(item.status)}`;
+        const details = [
+          item.message || '',
+          item.actualHeaders ? `ヘッダ: ${item.actualHeaders}` : ''
+        ].filter(Boolean).join('\n');
+        if (details) chip.title = details;
+        container.appendChild(chip);
+      });
+
+      if (diagnostics.summaryText) {
+        const summary = document.createElement('span');
+        summary.className = 'schema-summary';
+        summary.textContent = diagnostics.summaryText;
+        container.appendChild(summary);
+      }
+
+      container.hidden = false;
     }
 
     // 予期せぬエラー時もローディングを閉じ、ユーザー向けに通知
@@ -2503,6 +2620,9 @@
           const data = await runGAS('getInitialData', ym);
           if (data.filterOptions) {
             filterOptions = data.filterOptions;
+          }
+          if (data.diagnostics) {
+            renderSchemaDiagnostics(data.diagnostics);
           }
           reservationCache[ym] = data.reservations || [];
         }
