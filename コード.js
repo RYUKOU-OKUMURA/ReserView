@@ -19,7 +19,7 @@ var ANNUAL_PLAN_SHEET = 'AnnualPlans'; // 年次の予算/計画（CF用）
 var STAFF_CONFIG_SHEET = 'StaffConfig'; // スタッフ別メインレーン・勤務設定（稼働率用）
 var STAFF_CONFIG_HEADERS = ['担当', 'メインレーン', '勤務開始', '勤務終了', '勤務曜日', '有効'];
 var DEFAULT_OCCUPANCY_START_MINUTES = 9 * 60;
-var DEFAULT_OCCUPANCY_END_MINUTES = 18 * 60;
+var DEFAULT_OCCUPANCY_END_MINUTES = 22 * 60;
 
 // ========================================
 // Webアプリ エントリーポイント
@@ -63,6 +63,15 @@ function getSheetValues_(sheet) {
     return [];
   }
   return sheet.getRange(1, 1, lastRow, lastCol).getValues();
+}
+
+function getSheetDisplayValues_(sheet) {
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) {
+    return [];
+  }
+  return sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
 }
 
 /**
@@ -591,7 +600,8 @@ function parseTimeToMinutes_(timeValue) {
 
   if (timeValue instanceof Date) {
     if (isNaN(timeValue.getTime())) return null;
-    return timeValue.getHours() * 60 + timeValue.getMinutes();
+    var formattedTime = Utilities.formatDate(timeValue, 'Asia/Tokyo', 'HH:mm');
+    return parseTimeToMinutes_(formattedTime);
   }
 
   if (typeof timeValue === 'number' && isFinite(timeValue)) {
@@ -611,6 +621,17 @@ function parseTimeToMinutes_(timeValue) {
   }
 
   return hours * 60 + minutes;
+}
+
+function getTimeCellMinutes_(rawValue, displayValue) {
+  var displayMinutes = parseTimeToMinutes_(displayValue);
+  if (displayMinutes !== null) return displayMinutes;
+  return parseTimeToMinutes_(rawValue);
+}
+
+function getDateCellValue_(rawValue, displayValue) {
+  var displayDate = parseDateValue_(displayValue);
+  return displayDate ? displayValue : rawValue;
 }
 
 function clipIntervalToBusinessHours_(startMinutes, endMinutes, businessStart, businessEnd) {
@@ -668,7 +689,9 @@ function createEmptyOccupancyAnalysis_() {
   });
 
   var byHour = [];
-  for (var hour = 9; hour <= 17; hour++) {
+  var firstHour = DEFAULT_OCCUPANCY_START_MINUTES / 60;
+  var lastHour = DEFAULT_OCCUPANCY_END_MINUTES / 60 - 1;
+  for (var hour = firstHour; hour <= lastHour; hour++) {
     byHour.push({ label: hour + '時', occupancy: 0 });
   }
 
@@ -683,6 +706,7 @@ function createEmptyOccupancyAnalysis_() {
       lowHour: '',
       businessDayCount: 0,
       availableMinutes: 0,
+      occupiedMinutes: 0,
       staffName: '',
       note: ''
     }
@@ -819,6 +843,7 @@ function buildSuggestedStaffConfigRowsFromReservations_() {
   if (!sheet) return [];
 
   var data = getSheetValues_(sheet);
+  var displayData = getSheetDisplayValues_(sheet);
   if (data.length < 2) return [];
 
   var headers = data[0];
@@ -829,6 +854,7 @@ function buildSuggestedStaffConfigRowsFromReservations_() {
   var staffStats = {};
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
+    var displayRow = displayData[i] || [];
     if (!isIncludedReservationStatus_(row[col.status])) continue;
 
     var staffName = String(row[col.staff] || '').trim();
@@ -854,8 +880,8 @@ function buildSuggestedStaffConfigRowsFromReservations_() {
       stat.laneCounts[lane]++;
     }
 
-    var startMinutes = parseTimeToMinutes_(row[col.start]);
-    var endMinutes = parseTimeToMinutes_(row[col.end]);
+    var startMinutes = getTimeCellMinutes_(row[col.start], displayRow[col.start]);
+    var endMinutes = getTimeCellMinutes_(row[col.end], displayRow[col.end]);
     var clipped = clipIntervalToBusinessHours_(
       startMinutes,
       endMinutes,
@@ -867,7 +893,7 @@ function buildSuggestedStaffConfigRowsFromReservations_() {
       if (stat.maxEnd === null || clipped[1] > stat.maxEnd) stat.maxEnd = clipped[1];
     }
 
-    var dateObj = parseDateValue_(row[col.date]);
+    var dateObj = parseDateValue_(getDateCellValue_(row[col.date], displayRow[col.date]));
     var dowIdx = getBusinessDayOfWeekIndex_(dateObj);
     if (dowIdx >= 0) stat.dowMap[dowIdx] = true;
   }
@@ -1076,6 +1102,7 @@ function loadStaffOccupancyConfigs_() {
   if (!sheet) return [];
 
   var data = getSheetValues_(sheet);
+  var displayData = getSheetDisplayValues_(sheet);
   if (data.length < 2) return [];
 
   var headers = data[0];
@@ -1088,6 +1115,7 @@ function loadStaffOccupancyConfigs_() {
   var list = [];
   for (var r = 1; r < data.length; r++) {
     var row = data[r];
+    var displayRow = displayData[r] || [];
     if (col.enabled >= 0 && !isStaffConfigRowEnabled_(row[col.enabled])) continue;
 
     var name = String(row[col.name] || '').trim();
@@ -1096,8 +1124,8 @@ function loadStaffOccupancyConfigs_() {
     var mainLane = normalizeOccupancyLaneValue_(row[col.mainLane]);
     if (!mainLane) continue;
 
-    var startMin = parseTimeToMinutes_(row[col.workStart]);
-    var endMin = parseTimeToMinutes_(row[col.workEnd]);
+    var startMin = getTimeCellMinutes_(row[col.workStart], displayRow[col.workStart]);
+    var endMin = getTimeCellMinutes_(row[col.workEnd], displayRow[col.workEnd]);
     if (startMin === null || endMin === null || endMin <= startMin) continue;
 
     var dowMap = parseStaffWorkDayMap_(row[col.workDow]);
@@ -1190,13 +1218,17 @@ function invalidateAnalysisCaches_(yearMonth) {
     ['salesTrendYear', year].join(':'),
     ['menuAnalysisYear', year].join(':'),
     ['monthlySales', yearMonth].join(':'),
-    ['occupancyAnalysis', yearMonth].join(':')
+    ['occupancyAnalysis', yearMonth].join(':'),
+    ['occupancyAnalysisV2', yearMonth].join(':'),
+    ['occupancyAnalysisV3', yearMonth].join(':')
   ];
 
   var staffNames = getOccupancyStaffNamesForCachePurge_();
   for (var s = 0; s < staffNames.length; s++) {
     keys.push(
-      ['occupancyAnalysis', yearMonth, occupancyStaffCacheKey_(staffNames[s])].join(':')
+      ['occupancyAnalysis', yearMonth, occupancyStaffCacheKey_(staffNames[s])].join(':'),
+      ['occupancyAnalysisV2', yearMonth, occupancyStaffCacheKey_(staffNames[s])].join(':'),
+      ['occupancyAnalysisV3', yearMonth, occupancyStaffCacheKey_(staffNames[s])].join(':')
     );
   }
 
@@ -2965,10 +2997,10 @@ function getOccupancyAnalysis(yearMonth, staffName) {
       throw new Error('スタッフを選択してください');
     }
 
-    var cacheKey = ['occupancyAnalysis', yearMonth, occupancyStaffCacheKey_(staffTrimmed)].join(':');
+    var cacheKey = ['occupancyAnalysisV3', yearMonth, occupancyStaffCacheKey_(staffTrimmed)].join(':');
     return withCache_(cacheKey, 600, function() {
-      var BUSINESS_START = 9 * 60;
-      var BUSINESS_END = 18 * 60;
+      var BUSINESS_START = DEFAULT_OCCUPANCY_START_MINUTES;
+      var BUSINESS_END = DEFAULT_OCCUPANCY_END_MINUTES;
 
       var emptyResult = createEmptyOccupancyAnalysis_();
       var calendar = buildOccupancyCalendar_(yearMonth);
@@ -3019,6 +3051,7 @@ function getOccupancyAnalysis(yearMonth, staffName) {
       }
 
       var data = getSheetValues_(sheet);
+      var displayData = getSheetDisplayValues_(sheet);
       if (data.length < 1) {
         return emptyResult;
       }
@@ -3038,7 +3071,8 @@ function getOccupancyAnalysis(yearMonth, staffName) {
 
       for (var i = 1; i < data.length; i++) {
         var row = data[i];
-        var dateValue = row[col.date];
+        var displayRow = displayData[i] || [];
+        var dateValue = getDateCellValue_(row[col.date], displayRow[col.date]);
         if (!dateValue) continue;
         if (!isIncludedReservationStatus_(row[col.status])) continue;
 
@@ -3058,8 +3092,8 @@ function getOccupancyAnalysis(yearMonth, staffName) {
         var dayOfWeekIndex = getBusinessDayOfWeekIndex_(dateObj);
         if (dayOfWeekIndex < 0 || dayOfWeekIndex > 5) continue;
 
-        var startMinutes = parseTimeToMinutes_(row[col.start]);
-        var endMinutes = parseTimeToMinutes_(row[col.end]);
+        var startMinutes = getTimeCellMinutes_(row[col.start], displayRow[col.start]);
+        var endMinutes = getTimeCellMinutes_(row[col.end], displayRow[col.end]);
         var clipped = clipIntervalToBusinessHours_(startMinutes, endMinutes, BUSINESS_START, BUSINESS_END);
         if (!clipped) continue;
 
@@ -3090,8 +3124,13 @@ function getOccupancyAnalysis(yearMonth, staffName) {
       });
       var dayOccupiedMinutes = [0, 0, 0, 0, 0, 0, 0];
       var dayCapacityMinutes = [0, 0, 0, 0, 0, 0, 0];
-      var hourOccupiedMinutes = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-      var hourCapacityMinutes = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+      var hourBucketCount = (BUSINESS_END - BUSINESS_START) / 60;
+      var hourOccupiedMinutes = [];
+      var hourCapacityMinutes = [];
+      for (var hourBucket = 0; hourBucket < hourBucketCount; hourBucket++) {
+        hourOccupiedMinutes.push(0);
+        hourCapacityMinutes.push(0);
+      }
       var totalOccupiedMinutes = 0;
 
       for (var k2 = 0; k2 < staffDayOrderedKeys.length; k2++) {
@@ -3137,10 +3176,11 @@ function getOccupancyAnalysis(yearMonth, staffName) {
       }
 
       var byHour = [];
+      var firstHour = BUSINESS_START / 60;
       for (var hour = 0; hour < hourOccupiedMinutes.length; hour++) {
         var capH = hourCapacityMinutes[hour];
         byHour.push({
-          label: (9 + hour) + '時',
+          label: (firstHour + hour) + '時',
           occupancy: capH > 0
             ? roundToOneDecimal_(hourOccupiedMinutes[hour] / capH * 100)
             : 0
@@ -3156,6 +3196,7 @@ function getOccupancyAnalysis(yearMonth, staffName) {
         lowHour: '',
         businessDayCount: workDayCount,
         availableMinutes: totalShiftMinutes,
+        occupiedMinutes: totalOccupiedMinutes,
         staffName: staffCfg.name
       };
 

@@ -3700,6 +3700,9 @@
       const sum = data.summary || {};
       const noteParts = [];
       noteParts.push(`勤務日 ${sum.businessDayCount || 0}日`);
+      if (sum.occupiedMinutes != null) {
+        noteParts.push(`予約占有 ${formatOccupancyMinutes_(sum.occupiedMinutes)}`);
+      }
       if (sum.availableMinutes != null) {
         noteParts.push(`提供可能 ${formatOccupancyMinutes_(sum.availableMinutes)}`);
       }
